@@ -416,7 +416,8 @@ function shrinkImage(file) {
 async function importPack(files) {
   let n = 0;
   for (const f of files) {
-    if (!f.type.startsWith('image/')) continue;
+    // 「ファイル」から選ぶと種類が空のことがあるので、拡張子でも判定する
+    if (!f.type.startsWith('image/') && !/\.(png|jpe?g|webp|gif|heic)$/i.test(f.name)) continue;
     const src = await shrinkImage(f);
     if (src) { AV.pack.push(src); n++; }
   }
@@ -965,7 +966,8 @@ function homeHTML() {
       : '<p class="mh-note">キャラ素材（画像）を読み込むと、ここから選べます。部屋の中では、親機の人が読み込んだキャラからも選べます。</p>';
     panel = mhPanel('名前とキャラを決める', `${nameField}
       <div class="mh-field"><span>キャラ</span>${charaGrid(AV.pack, 'pick-own')}</div>${packNote}
-      <div class="mh-packbtns"><button class="mh-btn ghost small" data-act="import">キャラ素材を読み込む</button>
+      <div class="mh-packbtns"><button class="mh-btn ghost small" data-act="import" data-src="packfiles">「ファイル」から読み込む</button>
+        <button class="mh-btn ghost small" data-act="import" data-src="packphotos">写真から読み込む</button>
         ${AV.pack.length ? '<button class="mh-btn ghost small" data-act="clear-pack">素材を全部消す</button>' : ''}</div>`,
       `${myName ? '<button class="mh-btn ghost" data-act="home-back">もどる</button>' : ''}<button class="mh-btn" data-act="name-ok">決定</button>`);
   } else if (view === 'help') {
@@ -984,7 +986,8 @@ function homeHTML() {
     ${!title && AV.mine ? `<div class="mh-chara ${avClass(AV.mine)}"></div>` : ''}
     ${title ? '<div class="mh-press">― タップしてはじめる ―</div>' : `<div class="mh-stage">${panel}</div>`}
     ${!title && myName ? `<div class="mh-who">${avatarHTML(AV.mine, myName, 30)}<div><span>PLAYER</span><b>${esc(myName)}</b></div></div>` : ''}
-    <input type="file" id="packfile" accept="image/*" multiple hidden>
+    <input type="file" id="packfiles" class="packinput" accept=".png,.jpg,.jpeg,.webp,.gif,.heic,image/png,image/jpeg,image/webp" multiple hidden>
+    <input type="file" id="packphotos" class="packinput" accept="image/*" multiple hidden>
     <div class="mh-foot">${title ? 'ログイン不要 ・ iPhoneを横にして遊べます' : ''}</div>
     ${ui.fullhelp ? fullHelpHTML() : ''}
   </div>`;
@@ -1277,7 +1280,7 @@ function endHTML() {
 /* ---------- 操作 ---------- */
 
 app.addEventListener('change', (e) => {
-  if (e.target.id === 'packfile' && e.target.files && e.target.files.length) {
+  if (e.target.classList.contains('packinput') && e.target.files && e.target.files.length) {
     const files = [...e.target.files];
     e.target.value = '';
     importPack(files);
@@ -1351,7 +1354,7 @@ function onAct(a, ds) {
     }
     case 'menu': ui.menu = true; return render();
     case 'menu-close': ui.menu = false; return render();
-    case 'import': { const f = document.getElementById('packfile'); if (f) f.click(); return; }
+    case 'import': { const f = document.getElementById(ds.src || 'packfiles'); if (f) f.click(); return; }
     case 'clear-pack': AV.pack = []; savePack(); toast('キャラ素材を消しました'); return render();
     case 'pick-own': {
       const i = +ds.i;
