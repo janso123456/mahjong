@@ -30,6 +30,128 @@ input:focus-visible { outline: 2px solid var(--gold); outline-offset: 2px; }
 .dot.off { background: #ff9a85; }
 .net { font-size: 11px; color: var(--muted); display: flex; gap: 5px; align-items: center; }
 .or { color: var(--muted); font-size: 12px; text-align: center; letter-spacing: .1em; }
+/* タイトル画面：夕暮れの山並みと火の粉。金と青銅の枠のパネルに、項目が右からすべり込む */
+.mh {
+  --mh-gold: #d8b25a; --mh-gold-hi: #fff2c4; --mh-gold-lo: #7a5420; --mh-text: #f3e6c4; --mh-dim: #b9a072;
+  position: fixed; inset: 0; overflow: hidden; z-index: 1; color: var(--mh-text);
+  background:
+    radial-gradient(ellipse 90% 55% at 50% 105%, rgba(150, 62, 18, .75) 0%, transparent 65%),
+    radial-gradient(ellipse 60% 40% at 50% 0%, rgba(40, 70, 80, .5) 0%, transparent 70%),
+    linear-gradient(#0a1216 0%, #142229 40%, #2a1a0e 100%);
+}
+.mh.is-title { cursor: pointer; }
+.mh-far, .mh-near { position: absolute; left: 0; right: 0; bottom: 0; pointer-events: none; }
+.mh-far { height: 58%; background: #18130f; opacity: .8;
+  clip-path: polygon(0 55%, 8% 40%, 17% 52%, 28% 22%, 37% 44%, 46% 30%, 55% 48%, 66% 18%, 76% 42%, 86% 28%, 100% 46%, 100% 100%, 0 100%); }
+.mh-near { height: 40%; background: #0b0806;
+  clip-path: polygon(0 40%, 10% 62%, 21% 34%, 33% 58%, 44% 40%, 58% 66%, 69% 36%, 80% 56%, 91% 30%, 100% 52%, 100% 100%, 0 100%); }
+.mh-fx { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
+.mh-vignette { position: absolute; inset: 0; pointer-events: none; background: radial-gradient(ellipse at center, transparent 45%, rgba(0, 0, 0, .7)); }
+
+.mh-logo { position: absolute; display: flex; align-items: center; gap: 14px; pointer-events: none; }
+.mh-logo.big { left: 50%; top: 44%; transform: translate(-50%, -50%); flex-direction: column; gap: 6px; text-align: center; animation: mhLogoIn 1.2s cubic-bezier(.2, .8, .2, 1) both; }
+.mh-logo.small { left: max(18px, env(safe-area-inset-left, 0px)); top: max(14px, env(safe-area-inset-top, 0px)); animation: mhFadeDown .5s ease-out both; }
+.mh-crest { width: clamp(70px, 16vh, 120px); height: auto; filter: drop-shadow(0 4px 6px rgba(0, 0, 0, .6)) drop-shadow(0 0 16px rgba(255, 170, 60, .25)); }
+.mh-logo.small .mh-crest { width: 46px; }
+.mh-title { display: flex; flex-direction: column; align-items: center; }
+.mh-logo.small .mh-title { align-items: flex-start; }
+.mh-ja {
+  font-family: var(--f-disp); font-size: clamp(44px, 12vh, 92px); line-height: 1.05; letter-spacing: .1em; padding: 0 .1em;
+  background:
+    linear-gradient(110deg, transparent 42%, rgba(255, 255, 255, .95) 50%, transparent 58%) -150% 0 / 250% 100% no-repeat,
+    linear-gradient(#fff6d6 0%, #f0cf7a 38%, #a8741f 52%, #e2bb62 70%, #fff0c0 100%);
+  -webkit-background-clip: text; background-clip: text; color: transparent;
+  filter: drop-shadow(0 3px 0 #2e1a06) drop-shadow(0 0 22px rgba(255, 160, 50, .35));
+  animation: mhShine 4.5s ease-in-out 1.2s infinite;
+}
+.mh-logo.small .mh-ja { font-size: 26px; animation: none; }
+.mh-en { font-size: 11px; letter-spacing: .42em; color: var(--mh-gold); margin-top: 4px; text-shadow: 0 1px 0 #000; }
+.mh-logo.small .mh-en { font-size: 9px; letter-spacing: .3em; }
+.mh-press { position: absolute; left: 50%; bottom: 15%; transform: translateX(-50%); white-space: nowrap;
+  font-family: var(--f-disp); font-size: clamp(16px, 4.2vh, 22px); letter-spacing: .25em; color: var(--mh-text);
+  text-shadow: 0 0 12px rgba(255, 190, 90, .8), 0 2px 0 #000; animation: mhBlink 1.6s ease-in-out infinite, mhFadeUp .8s ease-out .9s both; }
+.mh-foot { position: absolute; left: 50%; bottom: max(10px, env(safe-area-inset-bottom, 0px)); transform: translateX(-50%);
+  font-size: 11px; letter-spacing: .2em; color: rgba(243, 230, 196, .5); white-space: nowrap; pointer-events: none; }
+
+.mh-stage { position: absolute; right: max(20px, env(safe-area-inset-right, 0px)); top: 50%; transform: translateY(-50%); width: min(460px, 56vw); }
+.mh-panel {
+  position: relative; border-radius: 6px; overflow: hidden;
+  background: linear-gradient(rgba(42, 28, 14, .94), rgba(16, 11, 6, .96));
+  border: 2px solid var(--mh-gold);
+  box-shadow: inset 0 0 0 1px #3a2610, inset 0 0 40px rgba(0, 0, 0, .7), 0 0 0 4px rgba(0, 0, 0, .55), 0 14px 34px rgba(0, 0, 0, .65);
+  animation: mhPanelIn .4s cubic-bezier(.2, .8, .2, 1) both;
+}
+.mh-panel::before { content: ""; position: absolute; inset: 5px; border: 1px solid rgba(216, 178, 90, .3); border-radius: 3px; pointer-events: none; }
+.mh-head { display: flex; align-items: center; justify-content: center; gap: 12px; padding: 8px 14px;
+  background: linear-gradient(#6e4b1b, #3a250b); border-bottom: 2px solid var(--mh-gold); }
+.mh-head h2 { margin: 0; font-family: var(--f-disp); font-weight: 400; font-size: 18px; letter-spacing: .25em; color: #fbe7b0; text-shadow: 0 2px 0 #000; }
+.mh-gem { width: 9px; height: 9px; transform: rotate(45deg); background: linear-gradient(135deg, #ffe9a8, #b8862d); box-shadow: 0 0 8px rgba(255, 207, 106, .8); }
+.mh-body { padding: 12px 14px; display: flex; flex-direction: column; gap: 10px; max-height: calc(100vh - 150px); overflow-y: auto; }
+.mh-list { display: flex; flex-direction: column; gap: 3px; margin: -4px -6px; }
+.mh-item {
+  position: relative; display: grid; text-align: left; gap: 1px; min-height: 46px; padding: 7px 12px 7px 32px;
+  background: linear-gradient(90deg, rgba(255, 255, 255, .045), transparent 85%); color: var(--mh-text);
+  border: 1px solid transparent; border-radius: 3px; box-shadow: none; font-weight: 700;
+  animation: mhItemIn .45s cubic-bezier(.2, .8, .2, 1) both; animation-delay: calc(var(--i) * 65ms + 150ms);
+}
+.mh-item:active { transform: none; }
+.mh-lbl { font-family: var(--f-disp); font-weight: 400; font-size: 19px; letter-spacing: .14em; text-shadow: 0 2px 0 #000; }
+.mh-sub { font-size: 11px; font-weight: 500; color: var(--mh-dim); }
+.mh-cur { position: absolute; left: 11px; top: 50%; transform: translateY(-50%); font-size: 12px; color: #ffd36b; opacity: 0; text-shadow: 0 0 8px #ffb84a; }
+.mh-item:hover, .mh-item:focus-visible, .mh-item:active {
+  outline: none; border-color: rgba(255, 214, 120, .65);
+  background: linear-gradient(90deg, rgba(232, 178, 74, .38), rgba(232, 178, 74, .06) 85%);
+}
+.mh-item:hover .mh-cur, .mh-item:focus-visible .mh-cur, .mh-item:active .mh-cur { opacity: 1; animation: mhCur .5s ease-in-out infinite alternate; }
+.mh-field { display: flex; flex-direction: column; gap: 6px; }
+.mh-field > span { font-size: 12px; letter-spacing: .15em; color: var(--mh-gold); }
+.mh-field input { background: #0d0905; color: #fbe7b0; border: 1px solid #8a6a2a; border-radius: 4px; font-family: var(--f-disp); font-size: 20px; letter-spacing: .08em; box-shadow: inset 0 2px 6px rgba(0, 0, 0, .7); }
+.mh-field input.mh-code { font-size: 30px; letter-spacing: .5em; text-align: center; padding-left: .5em; }
+.mh-field input::placeholder { color: #5b4a2a; }
+.mh-note { margin: 0; font-size: 12px; color: var(--mh-dim); }
+.mh-help p { margin: 0 0 8px; font-size: 13px; line-height: 1.75; color: var(--mh-text); }
+.mh-help b { color: #ffd98a; }
+.mh-actions { display: flex; gap: 10px; justify-content: flex-end; padding: 0 14px 14px; }
+.mh-btn { min-width: 110px; font-family: var(--f-disp); font-weight: 400; font-size: 17px; letter-spacing: .2em; color: #fbe7b0;
+  background: linear-gradient(#80581f, #3c2709); border: 1px solid #d1a752; border-radius: 4px; box-shadow: 0 2px 0 #000, inset 0 1px 0 rgba(255, 240, 200, .35); }
+.mh-btn.ghost { background: rgba(0, 0, 0, .35); border-color: #6b5426; color: var(--mh-dim); }
+
+.mh-who { position: absolute; left: max(18px, env(safe-area-inset-left, 0px)); bottom: max(16px, env(safe-area-inset-bottom, 0px));
+  display: flex; align-items: center; gap: 10px; padding: 6px 14px 6px 6px; border: 1px solid rgba(216, 178, 90, .55); border-radius: 4px;
+  background: linear-gradient(90deg, rgba(40, 26, 12, .9), rgba(40, 26, 12, .4)); animation: mhFadeUp .5s ease-out .2s both; }
+.mh-who .av { width: 30px; height: 30px; font-size: 14px; }
+.mh-who span { font-size: 10px; letter-spacing: .25em; color: var(--mh-gold); display: block; }
+.mh-who b { font-family: var(--f-disp); font-weight: 400; font-size: 17px; letter-spacing: .08em; color: #fbe7b0; }
+
+/* 横向きで画面の高さが低いときは項目を詰める */
+@media (orientation: landscape) and (max-height: 460px) {
+  .mh-item { min-height: 0; padding: 4px 12px 4px 30px; }
+  .mh-lbl { font-size: 16px; line-height: 1.25; }
+  .mh-sub { font-size: 10px; line-height: 1.3; }
+  .mh-head { padding: 5px 14px; }
+  .mh-head h2 { font-size: 15px; }
+  .mh-body { padding: 10px 12px; max-height: calc(100vh - 90px); }
+}
+
+/* 縦向き：ロゴを上に、パネルを下に */
+@media (orientation: portrait) {
+  .mh-stage { left: 16px; right: 16px; width: auto; top: auto; bottom: max(24px, env(safe-area-inset-bottom, 0px)); transform: none; }
+  .mh-logo.big { top: 40%; }
+  .mh-body { max-height: 62vh; }
+}
+
+@keyframes mhLogoIn { from { opacity: 0; transform: translate(-50%, -50%) scale(1.25); filter: blur(8px); } to { opacity: 1; transform: translate(-50%, -50%) scale(1); filter: blur(0); } }
+@keyframes mhShine { 0%, 55% { background-position: -150% 0, 0 0; } 85%, 100% { background-position: 250% 0, 0 0; } }
+@keyframes mhBlink { 0%, 100% { opacity: 1; } 50% { opacity: .25; } }
+@keyframes mhFadeUp { from { opacity: 0; translate: 0 10px; } to { opacity: 1; translate: 0 0; } }
+@keyframes mhFadeDown { from { opacity: 0; translate: 0 -10px; } to { opacity: 1; translate: 0 0; } }
+@keyframes mhPanelIn { from { opacity: 0; clip-path: inset(0 0 100% 0); } to { opacity: 1; clip-path: inset(0 0 0 0); } }
+@keyframes mhItemIn { from { opacity: 0; translate: 40px 0; } to { opacity: 1; translate: 0 0; } }
+@keyframes mhCur { from { translate: -3px 0; } to { translate: 2px 0; } }
+@media (prefers-reduced-motion: reduce) {
+  .mh *, .mh *::before { animation: none !important; }
+}
+
 /* 対局画面：画面全体が卓。奥行きを付けた卓面に河と点数箱、外周に相手の手牌と名札、下に自分の手牌 */
 .tbl {
   /* 画面の幅・高さと端の余白。縦持ちのときは下で入れ替えて、横画面を90度回して表示する */
@@ -588,7 +710,8 @@ function riverHTML(seat) {
 
 function render() {
   app.classList.remove('is-game');
-  if (role === 'home') { app.innerHTML = homeHTML(); return; }
+  if (role === 'home') { app.innerHTML = homeHTML(); startFx(); return; }
+  cancelAnimationFrame(fxRaf);
   if (!S) { app.innerHTML = `<div class="lobby"><h1>社内麻雀卓</h1><p class="lead">部屋 ${esc(code)} に接続しています…</p>${netNote()}<button class="ghost" data-act="leave">やめる</button></div>`; return; }
   if (S.phase === 'lobby') { app.innerHTML = lobbyHTML(); return; }
   app.classList.add('is-game');
@@ -603,26 +726,137 @@ function netNote() {
     : `<p class="muted">接続が切れています。自動でつなぎ直します。</p>`;
 }
 
+/* ---------- タイトル画面・メインメニュー ---------- */
+
+let titleSeen = false;
+function homeView() {
+  if (ui.home) return ui.home;
+  if (new URLSearchParams(location.search).get('room')) return 'join';
+  return titleSeen ? 'menu' : 'title';
+}
+
+// 紋章：六角の盾に「中」の牌、後ろに交差した点棒
+const CREST = `<svg class="mh-crest" viewBox="0 0 120 120" aria-hidden="true">
+  <defs><linearGradient id="mhg" x1="0" y1="0" x2="0" y2="1">
+    <stop offset="0" stop-color="#fff2c4"/><stop offset=".45" stop-color="#d9ac52"/><stop offset=".55" stop-color="#8a5c1c"/><stop offset="1" stop-color="#e9c875"/></linearGradient></defs>
+  <rect x="56" y="2" width="8" height="116" rx="4" fill="url(#mhg)" transform="rotate(38 60 60)"/>
+  <rect x="56" y="2" width="8" height="116" rx="4" fill="url(#mhg)" transform="rotate(-38 60 60)"/>
+  <circle cx="60" cy="16" r="2.4" fill="#c8282a" transform="rotate(38 60 60)"/><circle cx="60" cy="16" r="2.4" fill="#c8282a" transform="rotate(-38 60 60)"/>
+  <polygon points="60,10 100,32 100,86 60,110 20,86 20,32" fill="#1a120a" stroke="url(#mhg)" stroke-width="5"/>
+  <polygon points="60,19 92,37 92,81 60,101 28,81 28,37" fill="none" stroke="#b8913f" stroke-width="1" opacity=".7"/>
+  <rect x="42" y="37" width="36" height="48" rx="5" fill="#1d56a3"/>
+  <rect x="42" y="33" width="36" height="46" rx="5" fill="#f5efe0"/>
+  <text x="60" y="57" font-family="'Hiragino Mincho ProN','Yu Mincho',serif" font-size="32" font-weight="700" fill="#c8282a" text-anchor="middle" dominant-baseline="central">中</text>
+</svg>`;
+
+function mhPanel(title, body, actions) {
+  return `<section class="mh-panel"><header class="mh-head"><span class="mh-gem"></span><h2>${title}</h2><span class="mh-gem"></span></header>
+    <div class="mh-body">${body}</div>${actions ? `<footer class="mh-actions">${actions}</footer>` : ''}</section>`;
+}
+
 function homeHTML() {
+  const view = homeView();
   const q = new URLSearchParams(location.search).get('room') || '';
   let saved = null;
   try { saved = JSON.parse(store.get('mj.hostroom') || 'null'); } catch (e) { saved = null; }
-  const resume = saved && saved.HS && saved.HS.phase !== 'end'
-    ? `<button class="ghost" data-act="resume">前の部屋 ${esc(saved.code)} を再開する（親機）</button>` : '';
-  return `<div class="lobby">
-    <div><h1>社内麻雀卓</h1><p class="lead">それぞれのiPhoneで同じ卓に座って打てる、4人打ちのリーチ麻雀です。役と点数は自動で計算します。ログインはいりません。</p></div>
-    <label class="field"><span>あなたの名前</span><input id="name" maxlength="12" placeholder="例：大久保" value="${esc(myName)}" autocomplete="nickname"></label>
-    <section class="field"><span>部屋番号を聞いている人</span>
-      <div class="join"><input id="code" inputmode="numeric" maxlength="4" placeholder="4桁" value="${esc(q)}"><button class="gold" data-act="join">参加する</button></div></section>
-    <div class="or">または</div>
-    <button class="hot" data-act="create">部屋を作る（このiPhoneが親機）</button>
-    ${resume}
-    <button class="ghost" data-act="practice">1人で練習する（CPU 3人）</button>
-    ${isFull() ? '' : '<button class="ghost" data-act="full">全画面で遊ぶ</button>'}
+  if (!(saved && saved.HS && saved.HS.phase !== 'end')) saved = null;
+  const nameField = `<label class="mh-field"><span>あなたの名前</span><input id="name" maxlength="12" placeholder="例：大久保" value="${esc(myName)}" autocomplete="nickname"></label>`;
+
+  let panel = '';
+  if (view === 'menu') {
+    const items = [
+      ['create', '部屋を作る', 'このiPhoneが親機になり、4桁の部屋番号を出します'],
+      ['go-join', '部屋に参加する', '教えてもらった部屋番号を入れて参加します'],
+      saved ? ['resume', `前の部屋 ${saved.code} を再開`, '親機だった部屋を続きから再開します'] : null,
+      ['practice', 'ひとりで練習', 'CPU 3人を相手に東風戦を打ちます'],
+      isFull() ? null : ['full', '全画面で遊ぶ', '画面いっぱいに表示します'],
+      ['go-name', '名前を変える', `いまの名前：${myName || '未設定'}`],
+      ['go-help', '遊び方・ルール', '親機の役目とルールを確認します'],
+    ].filter(Boolean);
+    panel = mhPanel('メインメニュー', `<div class="mh-list">${items.map(([a, l, s], i) =>
+      `<button class="mh-item" style="--i:${i}" data-act="${a}"><span class="mh-cur">▶</span><span class="mh-lbl">${esc(l)}</span><span class="mh-sub">${esc(s)}</span></button>`).join('')}</div>`);
+  } else if (view === 'join') {
+    panel = mhPanel('部屋に参加する',
+      `<label class="mh-field"><span>部屋番号（4桁）</span><input id="code" class="mh-code" inputmode="numeric" maxlength="4" placeholder="0000" value="${esc(q)}" autocomplete="off"></label>${nameField}`,
+      `<button class="mh-btn ghost" data-act="home-back">もどる</button><button class="mh-btn" data-act="join">参加する</button>`);
+  } else if (view === 'name') {
+    panel = mhPanel('名前を決める', `${nameField}<p class="mh-note">ほかの人の画面に、この名前で表示されます。</p>`,
+      `${myName ? '<button class="mh-btn ghost" data-act="home-back">もどる</button>' : ''}<button class="mh-btn" data-act="name-ok">決定</button>`);
+  } else if (view === 'help') {
+    panel = mhPanel('遊び方・ルール', `<div class="mh-help">
+      <p><b>部屋を作る人（親機）</b>が対局を進めます。親機の人は対局中このページを開いたままにしてください。閉じたりスリープしたりすると、全員の対局が止まります（開き直して「前の部屋を再開」で続きから再開できます）。</p>
+      <p>ほかの人は「部屋に参加する」で4桁の部屋番号を入れます。足りない席はCPUで埋められます。</p>
+      <p>25000点持ち30000点返し、ウマ10-20。喰いタン・後付け・ダブロンあり（供託・本場は上家取り）。赤ドラは部屋を作った人が選べます。トビ終了あり、オーラスの親はアガリやめ・テンパイやめ。九種九牌・四風連打などの途中流局と流し満貫はありません。</p></div>`,
+      `<button class="mh-btn" data-act="home-back">もどる</button>`);
+  }
+
+  const title = view === 'title';
+  return `<div class="mh ${title ? 'is-title' : ''}" ${title ? 'data-act="title-start"' : ''}>
+    <div class="mh-far"></div><div class="mh-near"></div>
+    <canvas class="mh-fx" id="mhfx"></canvas><div class="mh-vignette"></div>
+    <div class="mh-logo ${title ? 'big' : 'small'}">${CREST}<div class="mh-title"><span class="mh-ja">社内麻雀卓</span><span class="mh-en">SHANAI MAHJONG ・ FOUR PLAYERS</span></div></div>
+    ${title ? '<div class="mh-press">― タップしてはじめる ―</div>' : `<div class="mh-stage">${panel}</div>`}
+    ${!title && myName ? `<div class="mh-who"><span class="av" style="--hue:30">${esc(myName.slice(0, 1))}</span><div><span>PLAYER</span><b>${esc(myName)}</b></div></div>` : ''}
+    <div class="mh-foot">${title ? 'ログイン不要 ・ iPhoneを横にして遊べます' : ''}</div>
     ${ui.fullhelp ? fullHelpHTML() : ''}
-    <p class="rules">親機は対局を進める役です。親機の人は対局中このページを開いたままにしてください。閉じたりスリープしたりすると、全員の対局が止まります（開き直せば続きから再開できます）。</p>
-    <p class="rules">ルール：25000点持ち30000点返し、ウマ10-20。喰いタンあり、後付けあり、ダブロンあり（供託・本場は上家取り）、赤ドラは設定による。トビ終了あり、オーラスの親はアガリやめ・テンパイやめ。九種九牌・四風連打などの途中流局と流し満貫はありません。</p>
   </div>`;
+}
+
+// 火の粉
+let fxRaf = 0;
+const embers = [];
+function startFx() {
+  cancelAnimationFrame(fxRaf);
+  const cv = document.getElementById('mhfx');
+  if (!cv || matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+  const ctx = cv.getContext('2d');
+  const loop = () => {
+    if (!cv.isConnected) return;
+    const dpr = Math.min(2, window.devicePixelRatio || 1);
+    const w = cv.clientWidth * dpr, h = cv.clientHeight * dpr;
+    if (cv.width !== w || cv.height !== h) { cv.width = w; cv.height = h; }
+    ctx.clearRect(0, 0, w, h);
+    while (embers.length < 70) {
+      embers.push({ x: Math.random() * w, y: h + Math.random() * h * .3, vy: -(0.4 + Math.random() * 1.1) * dpr,
+        sway: Math.random() * 6.28, r: (0.8 + Math.random() * 2.2) * dpr, life: 0, max: 280 + Math.random() * 260 });
+    }
+    ctx.globalCompositeOperation = 'lighter';
+    for (let i = embers.length - 1; i >= 0; i--) {
+      const e = embers[i];
+      e.life++; e.y += e.vy; e.sway += 0.03; e.x += Math.sin(e.sway) * 0.5 * dpr;
+      const a = Math.max(0, Math.min(1, e.life / 40, (e.max - e.life) / 80)) * (0.6 + Math.random() * 0.4);
+      if (e.life > e.max || e.y < -10) { embers.splice(i, 1); continue; }
+      const g = ctx.createRadialGradient(e.x, e.y, 0, e.x, e.y, e.r * 3);
+      g.addColorStop(0, `rgba(255,214,140,${a})`); g.addColorStop(.4, `rgba(255,140,40,${a * .6})`); g.addColorStop(1, 'rgba(255,90,20,0)');
+      ctx.fillStyle = g;
+      ctx.beginPath(); ctx.arc(e.x, e.y, e.r * 3, 0, 6.283); ctx.fill();
+    }
+    ctx.globalCompositeOperation = 'source-over';
+    fxRaf = requestAnimationFrame(loop);
+  };
+  fxRaf = requestAnimationFrame(loop);
+}
+
+// 効果音（WebAudioで合成。最初のタップから鳴る）
+let actx = null;
+function sfx(kind) {
+  try {
+    actx = actx || new (window.AudioContext || window.webkitAudioContext)();
+    if (actx.state === 'suspended') actx.resume();
+    const t = actx.currentTime;
+    const tone = (freq, at, dur, type, vol) => {
+      const o = actx.createOscillator(), g = actx.createGain();
+      o.type = type; o.frequency.setValueAtTime(freq, t + at);
+      g.gain.setValueAtTime(0.0001, t + at);
+      g.gain.exponentialRampToValueAtTime(vol, t + at + 0.01);
+      g.gain.exponentialRampToValueAtTime(0.0001, t + at + dur);
+      o.connect(g); g.connect(actx.destination);
+      o.start(t + at); o.stop(t + at + dur + 0.02);
+    };
+    if (kind === 'start') { tone(392, 0, .5, 'triangle', .09); tone(523, .08, .5, 'triangle', .08); tone(784, .16, .7, 'triangle', .07); }
+    else if (kind === 'back') tone(440, 0, .12, 'square', .03);
+    else { tone(880, 0, .09, 'square', .035); tone(1320, .06, .16, 'triangle', .05); }
+  } catch (e) { /* 音が出せない環境では無音 */ }
 }
 
 function lobbyHTML() {
@@ -862,8 +1096,16 @@ app.addEventListener('click', (e) => {
   const el = e.target.closest('[data-act]');
   if (!el) return;
   if (el.classList.contains('sheet-bg') && e.target.closest('[data-stop]')) return;
+  if (el.closest('.mh')) sfx(el.dataset.act === 'title-start' ? 'start' : el.dataset.act === 'home-back' ? 'back' : 'ok');
   onAct(el.dataset.act, el.dataset);
 });
+
+// 名前がまだなら、先に名前を決めてもらってから続きをする
+function needName(next) {
+  if (myName) return false;
+  ui.home = 'name'; ui.afterName = next; render();
+  return true;
+}
 
 function onTile(id) {
   const me = mySeat();
@@ -879,16 +1121,28 @@ function onTile(id) {
 
 function onAct(a, ds) {
   switch (a) {
-    case 'create': return createRoom(null);
+    case 'title-start': titleSeen = true; ui.home = myName ? 'menu' : 'name'; return render();
+    case 'home-back': ui.home = 'menu'; ui.afterName = null; return render();
+    case 'go-join': ui.home = 'join'; return render();
+    case 'go-name': ui.home = 'name'; ui.afterName = null; return render();
+    case 'go-help': ui.home = 'help'; return render();
+    case 'name-ok': {
+      if (!myName) return toast('名前を入れてください');
+      const next = ui.afterName;
+      ui.afterName = null; ui.home = 'menu';
+      if (next) return onAct(next, {});
+      return render();
+    }
+    case 'create': if (needName('create')) return; ui.home = null; return createRoom(null);
     case 'resume': {
       let saved = null;
       try { saved = JSON.parse(store.get('mj.hostroom') || 'null'); } catch (e) { saved = null; }
-      if (!saved) return;
-      if (!myName) return toast('名前を入れてください');
+      if (!saved || needName('resume')) return;
+      ui.home = null;
       return createRoom(saved);
     }
     case 'join': return joinRoom((document.getElementById('code') || {}).value || '');
-    case 'practice': ui.menu = false; return startPractice();
+    case 'practice': ui.menu = false; if (role === 'home' && needName('practice')) return; return startPractice();
     case 'leave': ui.menu = false; return leaveRoom();
     case 'copy': {
       const link = ds.link;
