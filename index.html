@@ -12,7 +12,7 @@
 <title>社内麻雀卓</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Zen+Antique&family=Zen+Kaku+Gothic+New:wght@500;700&display=swap">
-<link rel="stylesheet" href="style.css?v=6">
+<link rel="stylesheet" href="style.css?v=7">
 <style>
 [hidden] { display: none !important; }
 body { margin: 0; padding-top: max(8px, env(safe-area-inset-top, 0px)); padding-bottom: max(16px, env(safe-area-inset-bottom, 0px)); }
@@ -160,12 +160,12 @@ input:focus-visible { outline: 2px solid var(--gold); outline-offset: 2px; }
   --sl: env(safe-area-inset-left, 0px);
   --sr: env(safe-area-inset-right, 0px);
   --sb: env(safe-area-inset-bottom, 0px);
-  --htw: min(56px, calc((var(--VW) - var(--sl) - var(--sr) - 40px) / 15.6), calc(var(--VH) * .115));
-  --handH: calc(var(--htw) * 1.36 + 14px + var(--sb));
+  --htw: min(54px, calc((var(--VW) - var(--sl) - var(--sr) - 40px) / 15.6), calc(var(--VH) * .1));
+  --handH: calc(var(--htw) * 1.57 + 20px + var(--sb));
   --planeH: calc(var(--VH) - var(--handH));
   touch-action: manipulation;
-  --rtw: calc(var(--planeH) * .058);
-  --rth: calc(var(--rtw) * 1.36);
+  --rtw: calc(var(--planeH) * .054);
+  --rth: calc(var(--rtw) * 1.57);
   --rvW: calc(var(--rtw) * 6 + 5px);
   --rvH: calc(var(--rth) * 3 + 10px);
   --B: calc(var(--rvW) + 6px); /* 点数箱の幅＝河の幅にして、角で河どうしが重ならないように */
@@ -304,7 +304,7 @@ input:focus-visible { outline: 2px solid var(--gold); outline-offset: 2px; }
 
 <script src="https://cdn.jsdelivr.net/npm/peerjs@1.5.4/dist/peerjs.min.js"></script>
 <script src="engine.js?v=6"></script>
-<script src="tiles.js?v=6"></script>
+<script src="tiles.js?v=7"></script>
 <script>
 'use strict';
 const PREFIX = 'shanai-mj-7k2q-';      // PeerJSの公開サーバーで他と重ならないための接頭辞

@@ -43,12 +43,11 @@ button.small { min-height: 34px; padding: 6px 10px; font-size: 13px; }
 
 /* 牌 */
 .t {
-  --h: calc(var(--tw) * 1.36);
+  --h: calc(var(--tw) * 1.57); /* 牌画像の縦横比（土台込み） */
   display: inline-flex; flex-direction: column; align-items: center; justify-content: center;
   width: var(--tw); height: var(--h); flex: none; position: relative;
-  background-color: #fbfaf6; border-radius: calc(var(--tw) * .14);
-  background-repeat: no-repeat; background-position: center 45%; background-size: 90% 90%;
-  box-shadow: inset 0 -2px 0 #e4e1d8, inset 0 0 0 1px rgba(0, 0, 0, .06), 0 calc(var(--tw) * .12) 0 var(--back);
+  background-color: transparent; border-radius: calc(var(--tw) * .1);
+  background-repeat: no-repeat; background-position: center; background-size: 100% 100%;
   color: var(--ink); line-height: 1; vertical-align: bottom;
 }
 .t b { font-family: var(--f-disp); font-weight: 400; font-size: calc(var(--tw) * .66); }
@@ -64,7 +63,7 @@ button.small { min-height: 34px; padding: 6px 10px; font-size: 13px; }
 .t.hatsu b { color: var(--sou); }
 .t.chun b { color: var(--man); }
 .t.haku::after { content: ""; position: absolute; inset: 22% 24%; border: 2px solid var(--pin); border-radius: 2px; }
-.t.back { background: linear-gradient(#2f6fc2, var(--back)); box-shadow: inset 0 -2px 0 #123d78, 0 calc(var(--tw) * .12) 0 #fbfaf6; }
+.t.back { background: linear-gradient(#2f6fc2 0%, var(--back) 80%, #0d3a78 80%); border: 1px solid rgba(0, 0, 0, .25); box-sizing: border-box; }
 .t.back > * { display: none; }
 .t.side { transform: rotate(90deg); margin: 0 calc((var(--h) - var(--tw)) / 2); }
 .t.dim { opacity: .38; }
