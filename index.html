@@ -136,14 +136,20 @@ button.mh-who:hover, button.mh-who:focus-visible { border-color: #ffd36b; box-sh
 }
 
 /* 部屋（ロビー） */
-.mh.no-anim .mh-logo, .mh.no-anim .seat-card, .mh.no-anim .room-code, .mh.no-anim .room-bar { animation: none; }
-.room-code { position: absolute; top: max(12px, env(safe-area-inset-top, 0px)); right: max(16px, env(safe-area-inset-right, 0px));
-  display: flex; align-items: center; gap: 12px; padding: 6px 8px 6px 14px; border: 1px solid var(--mh-gold); border-radius: 6px;
-  background: linear-gradient(rgba(42, 28, 14, .92), rgba(16, 11, 6, .94)); box-shadow: 0 6px 18px rgba(0, 0, 0, .5); animation: mhFadeDown .5s ease-out both; }
+.mh.no-anim .room-head, .mh.no-anim .seat-card, .mh.no-anim .room-bar { animation: none; }
+/* 上（ロゴと部屋番号）・真ん中（席）・下（ルールと操作）を縦に並べ、画面が小さければ席が縮む */
+.mh-room > .mh-logo { display: none; }
+.room-layout { position: absolute; inset: 0; display: grid; grid-template-rows: auto minmax(0, 1fr) auto; gap: 10px;
+  padding: max(10px, env(safe-area-inset-top, 0px)) max(14px, env(safe-area-inset-right, 0px)) max(10px, env(safe-area-inset-bottom, 0px)) max(14px, env(safe-area-inset-left, 0px)); }
+.room-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; min-width: 0; animation: mhFadeDown .5s ease-out both; }
+.room-logo { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.room-logo .mh-crest { width: 40px; flex: none; }
+.room-logo .mh-ja { font-size: 24px; animation: none; white-space: nowrap; }
+.room-code { display: flex; align-items: center; gap: 10px; padding: 4px 6px 4px 12px; border: 1px solid var(--mh-gold); border-radius: 6px; flex: none;
+  background: linear-gradient(rgba(42, 28, 14, .92), rgba(16, 11, 6, .94)); box-shadow: 0 6px 18px rgba(0, 0, 0, .5); }
 .room-code span { font-size: 11px; letter-spacing: .25em; color: var(--mh-gold); }
-.room-code b { font-family: var(--f-disp); font-weight: 400; font-size: 30px; letter-spacing: .25em; color: #fbe7b0; line-height: 1; text-shadow: 0 0 12px rgba(255, 190, 90, .5); font-variant-numeric: tabular-nums; }
-.room-seats { position: absolute; left: max(16px, env(safe-area-inset-left, 0px)); right: max(16px, env(safe-area-inset-right, 0px));
-  top: 74px; bottom: 74px; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; }
+.room-code b { font-family: var(--f-disp); font-weight: 400; font-size: 28px; letter-spacing: .22em; color: #fbe7b0; line-height: 1; text-shadow: 0 0 12px rgba(255, 190, 90, .5); font-variant-numeric: tabular-nums; }
+.room-seats { min-height: 0; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; }
 .seat-card { position: relative; overflow: hidden; border-radius: 6px; border: 2px solid #8a6a2a;
   background: radial-gradient(ellipse at 50% 100%, rgba(150, 90, 30, .35), transparent 70%), linear-gradient(rgba(42, 28, 14, .85), rgba(14, 9, 5, .92));
   box-shadow: inset 0 0 0 1px #3a2610, 0 8px 20px rgba(0, 0, 0, .55); animation: mhItemIn .5s cubic-bezier(.2, .8, .2, 1) both; animation-delay: calc(var(--i) * 80ms + 100ms); }
@@ -160,9 +166,9 @@ button.mh-who:hover, button.mh-who:focus-visible { border-color: #ffd36b; box-sh
 .seat-card.empty .sc-plate { background: rgba(0, 0, 0, .4); border-top-color: #6b5426; }
 .seat-card.empty .sc-plate b { color: var(--mh-dim); }
 .sc-btns { position: absolute; left: 0; right: 0; bottom: 38px; display: flex; justify-content: center; z-index: 2; }
-.room-bar { position: absolute; left: max(16px, env(safe-area-inset-left, 0px)); right: max(16px, env(safe-area-inset-right, 0px));
-  bottom: max(12px, env(safe-area-inset-bottom, 0px)); display: flex; align-items: center; gap: 8px; flex-wrap: wrap; animation: mhFadeUp .5s ease-out .2s both; }
-.room-bar .grow { flex: 1; }
+.room-bar { display: flex; align-items: center; gap: 8px; min-width: 0; animation: mhFadeUp .5s ease-out .2s both; }
+.room-bar > * { flex: none; }
+.room-bar .grow { flex: 1 1 0; min-width: 0; }
 .mh-seg { display: flex; border: 1px solid #8a6a2a; border-radius: 4px; overflow: hidden; background: rgba(0, 0, 0, .45); }
 .mh-seg button { min-height: 36px; padding: 4px 12px; border: 0; border-radius: 0; box-shadow: none; background: transparent; color: var(--mh-dim);
   font-family: var(--f-disp); font-weight: 400; font-size: 14px; letter-spacing: .1em; }
@@ -176,10 +182,34 @@ button.mh-who:hover, button.mh-who:focus-visible { border-color: #ffd36b; box-sh
   padding: 12px max(16px, env(safe-area-inset-right, 0px)) 12px max(16px, env(safe-area-inset-left, 0px)); }
 .room-setup .mh-panel { width: min(520px, 100%); }
 .mh-room .mh-stage { right: 50%; transform: translate(50%, -50%); }
+/* iPhone SE など横幅が狭い画面：文字とボタンを小さく */
+@media (max-width: 760px) {
+  .room-layout { gap: 8px; }
+  .room-logo .mh-ja { font-size: 19px; }
+  .room-logo .mh-crest { width: 32px; }
+  .room-code span { display: none; }
+  .room-code b { font-size: 24px; }
+  .room-seats { gap: 8px; }
+  .room-bar { gap: 6px; }
+  .mh-seg button { min-height: 34px; padding: 3px 9px; font-size: 13px; letter-spacing: .04em; }
+  .room-bar .mh-btn.small { padding: 3px 9px; font-size: 12px; letter-spacing: .04em; }
+  .mh-btn.go { min-width: 0; padding: 6px 16px; font-size: 16px; }
+  .sc-plate b { font-size: 13px; }
+  .sc-btns .mh-btn.small { font-size: 12px; padding: 3px 8px; }
+}
+/* 横向きで高さが低い画面（Safariのバーがあるときなど） */
+@media (orientation: landscape) and (max-height: 340px) {
+  .room-logo .mh-crest { width: 28px; }
+  .room-code b { font-size: 21px; }
+  .sc-plate { height: 26px; }
+  .sc-art, .sc-none { bottom: 28px; }
+  .sc-btns { bottom: 31px; }
+}
 @media (orientation: portrait) {
-  .room-code { left: 16px; right: 16px; top: 76px; justify-content: space-between; }
-  .room-seats { top: 140px; bottom: 150px; grid-template-columns: repeat(2, minmax(0, 1fr)); }
-  .room-bar { justify-content: center; }
+  .room-head { flex-wrap: wrap; }
+  .room-seats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .room-bar { flex-wrap: wrap; justify-content: center; }
+  .room-bar .grow { display: none; }
   .mh-room .mh-stage { transform: none; }
 }
 
@@ -321,6 +351,10 @@ html:has(body.in-game) { overflow: hidden; }
 .ps b.dealer { color: var(--hot); }
 .ptags { display: flex; gap: 3px; margin-top: 2px; }
 .pl-top { top: 8px; right: calc(50% + var(--otw) * 7.6 + 16px); }
+/* 横幅が狭い画面（iPhone SEなど）では、上の人の名札を手牌のすぐ下に置く */
+@media (max-width: 760px) {
+  .tbl .pl-top { top: calc(var(--otw) * 1.36 + 18px); right: auto; left: 50%; transform: translateX(-50%) scale(.9); transform-origin: top center; }
+}
 .pl-left { left: calc(var(--sl) + 104px); top: calc(var(--planeH) * .3); }
 .pl-right { right: calc(var(--sr) + 104px); top: calc(var(--planeH) * .3); flex-direction: row-reverse; padding: 4px 4px 4px 10px; }
 .pl-right .pinfo { align-items: flex-end; }
@@ -1198,13 +1232,16 @@ function lobbyHTML() {
     : `<span class="room-rule">${S.rules.length === 'tonpu' ? '東風戦' : '半荘戦'} ・ 赤ドラ${S.rules.aka ? 'あり' : 'なし'}</span>`;
   const status = net !== 'ok' ? `<div class="room-net">${net === 'connecting' ? '接続しています…' : role === 'client' ? '親機とつながっていません。自動でつなぎ直します' : '接続が切れています。自動でつなぎ直します'}</div>` : '';
   return `<div class="mh mh-room ${ui.lobbyShown ? 'no-anim' : ''}">${mhBackdrop()}
-    <div class="room-code"><span>部屋番号</span><b>${esc(code)}</b>
-      ${host ? `<button class="mh-btn ghost small" data-act="copy" data-link="${esc(link)}">参加用リンクをコピー</button>` : ''}</div>
-    <div class="room-seats">${seats}</div>
-    <div class="room-bar">${rules}<span class="grow"></span>
-      ${mySeat() >= 0 ? '<button class="mh-btn ghost small" data-act="room-setup">名前とキャラ</button>' : ''}
-      <button class="mh-btn ghost small" data-act="leave">${host ? '部屋を閉じる' : '部屋を出る'}</button>
-      ${host ? `<button class="mh-btn go" data-act="start" ${filled ? '' : 'disabled'}>対局開始</button>` : '<span class="room-wait">親機の人が開始するのを待っています</span>'}</div>
+    <div class="room-layout">
+      <header class="room-head"><div class="room-logo">${CREST}<span class="mh-ja">社内麻雀卓</span></div>
+        <div class="room-code"><span>部屋番号</span><b>${esc(code)}</b>
+          ${host ? `<button class="mh-btn ghost small" data-act="copy" data-link="${esc(link)}">リンクをコピー</button>` : ''}</div></header>
+      <div class="room-seats">${seats}</div>
+      <div class="room-bar">${rules}<span class="grow"></span>
+        ${mySeat() >= 0 ? '<button class="mh-btn ghost small" data-act="room-setup">名前とキャラ</button>' : ''}
+        <button class="mh-btn ghost small" data-act="leave">${host ? '部屋を閉じる' : '部屋を出る'}</button>
+        ${host ? `<button class="mh-btn go" data-act="start" ${filled ? '' : 'disabled'}>対局開始</button>` : '<span class="room-wait">親機の開始待ち</span>'}</div>
+    </div>
     ${status}
     ${ui.roomSetup && mySeat() >= 0 ? roomSetupHTML() : ''}
   </div>`;
@@ -1536,7 +1573,7 @@ function onAct(a, ds) {
 /* ---------- 更新の確認 ----------
    ホーム画面から開くと古いページが残っていることがあるので、version.json を毎回取りに行き、
    新しい版があればURLを変えて読み込み直す（部屋の中にいるときは、部屋を出てから） */
-const BUILD = '2026-10-24.1';
+const BUILD = '2026-10-24.2';
 let newBuild = null, updateToldInRoom = false;
 function applyUpdateIfIdle() {
   if (!newBuild) return;
