@@ -6,6 +6,9 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="theme-color" content="#0d2629">
+<meta name="apple-mobile-web-app-title" content="社内麻雀卓">
+<link rel="manifest" href="manifest.json">
+<link rel="apple-touch-icon" href="icon-180.png">
 <title>社内麻雀卓</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Zen+Antique&family=Zen+Kaku+Gothic+New:wght@500;700&display=swap">
@@ -29,12 +32,16 @@ input:focus-visible { outline: 2px solid var(--gold); outline-offset: 2px; }
 .or { color: var(--muted); font-size: 12px; text-align: center; letter-spacing: .1em; }
 /* 対局画面：画面全体が卓。奥行きを付けた卓面に河と点数箱、外周に相手の手牌と名札、下に自分の手牌 */
 .tbl {
+  /* 画面の幅・高さと端の余白。縦持ちのときは下で入れ替えて、横画面を90度回して表示する */
+  --VW: 100vw;
+  --VH: 100vh; --VH: 100dvh;
   --sl: env(safe-area-inset-left, 0px);
   --sr: env(safe-area-inset-right, 0px);
-  --htw: min(56px, calc((100vw - var(--sl) - var(--sr) - 40px) / 15.6), 11.5vh);
-  --handH: calc(var(--htw) * 1.36 + 14px + env(safe-area-inset-bottom, 0px));
-  --planeH: calc(100vh - var(--handH));
-  --planeH: calc(100dvh - var(--handH));
+  --sb: env(safe-area-inset-bottom, 0px);
+  --htw: min(56px, calc((var(--VW) - var(--sl) - var(--sr) - 40px) / 15.6), calc(var(--VH) * .115));
+  --handH: calc(var(--htw) * 1.36 + 14px + var(--sb));
+  --planeH: calc(var(--VH) - var(--handH));
+  touch-action: manipulation;
   --rtw: calc(var(--planeH) * .058);
   --rth: calc(var(--rtw) * 1.36);
   --rvW: calc(var(--rtw) * 6 + 5px);
@@ -135,8 +142,8 @@ input:focus-visible { outline: 2px solid var(--gold); outline-offset: 2px; }
   gap: 14px; padding-left: var(--sl); padding-right: var(--sr); z-index: 4; }
 .handrow .hand { --tw: var(--htw); padding-top: 0; min-height: 0; gap: 1px; }
 .handrow .hand .t.sel { transform: translateY(-14px); }
-.mymelds { --tw: calc(var(--htw) * .7); display: flex; gap: 6px; align-self: flex-end; padding-bottom: calc(14px + env(safe-area-inset-bottom, 0px)); }
-.acts { position: absolute; right: calc(var(--sr) + 16px); bottom: calc(var(--handH) + 10px); display: flex; gap: 8px; align-items: center; z-index: 5; flex-wrap: wrap; justify-content: flex-end; max-width: 60vw; }
+.mymelds { --tw: calc(var(--htw) * .7); display: flex; gap: 6px; align-self: flex-end; padding-bottom: calc(14px + var(--sb)); }
+.acts { position: absolute; right: calc(var(--sr) + 16px); bottom: calc(var(--handH) + 10px); display: flex; gap: 8px; align-items: center; z-index: 5; flex-wrap: wrap; justify-content: flex-end; max-width: calc(var(--VW) * .6); }
 .acts button { min-width: 76px; min-height: 46px; border-radius: 999px; font-size: 16px; box-shadow: 0 3px 0 rgba(0,0,0,.35); }
 .acts button.ghost { background: rgba(10, 18, 28, .75); }
 .acts .mini { --tw: 14px; display: inline-flex; vertical-align: middle; }
@@ -146,20 +153,27 @@ input:focus-visible { outline: 2px solid var(--gold); outline-offset: 2px; }
   background: rgba(10, 18, 28, .6); padding: 4px 10px; border-radius: 999px; z-index: 3; white-space: nowrap; display: flex; gap: 6px; align-items: center; }
 .spect { position: absolute; bottom: 12px; left: 50%; transform: translateX(-50%); color: #d5dee8; font-size: 13px; }
 
-/* シートは横向きでは中央に */
-@media (orientation: landscape) {
-  .sheet-bg { align-items: center; }
-  .sheet { max-width: 720px; max-height: 92vh; border-radius: 18px; }
+/* 対局中の結果・メニューは卓の中央に（卓と一緒に回る） */
+.tbl .sheet-bg { position: absolute; align-items: center; }
+.tbl .sheet { max-width: 720px; max-height: calc(var(--VH) * .92); border-radius: 18px; }
+
+/* 縦持ち（画面の自動回転がオフのときなど）：横画面を90度回して全体に表示。iPhoneを左に倒して持つ */
+@media (orientation: portrait) {
+  .tbl {
+    --VW: 100vh; --VW: 100dvh;
+    --VH: 100vw;
+    --sl: env(safe-area-inset-top, 0px);
+    --sr: env(safe-area-inset-bottom, 0px);
+    --sb: 0px;
+    inset: auto; top: 0; left: 0;
+    width: var(--VW); height: var(--VH);
+    transform-origin: top left;
+    transform: translateX(100vw) rotate(90deg);
+  }
 }
 
-/* 縦持ちのときは横向きを促す */
-.rotate { display: none; }
-@media (orientation: portrait) {
-  .rotate { display: grid; place-items: center; position: fixed; inset: 0; z-index: 50; background: var(--felt-deep); text-align: center; padding: 24px; }
-  .rotate div { display: flex; flex-direction: column; gap: 8px; }
-  .rotate b { font-family: var(--f-disp); font-weight: 400; font-size: 22px; text-wrap: balance; }
-  .rotate span { color: var(--muted); }
-}
+/* 全画面にできない端末（iPhone）向けの案内 */
+.fullhelp ol { margin: 0; padding-left: 1.4em; line-height: 1.8; }
 </style>
 </head>
 <body>
@@ -486,6 +500,40 @@ const YAKU = [
   ['6翻', '清一色※'],
   ['役満', '国士無双・四暗刻・大三元・小四喜・大四喜・字一色・清老頭・緑一色・九蓮宝燈・四槓子・天和・地和'],
 ];
+/* ---------- 全画面 ---------- */
+
+// ホーム画面から開いた・全画面中なら、もう全画面
+function isFull() {
+  return !!(navigator.standalone || document.fullscreenElement || document.webkitFullscreenElement ||
+    matchMedia('(display-mode: standalone)').matches || matchMedia('(display-mode: fullscreen)').matches);
+}
+
+// Android・パソコンは全画面＋横向き固定。iPhoneのSafariはページから全画面にできないので、ホーム画面への追加を案内する
+async function goFull() {
+  const el = document.documentElement;
+  try {
+    if (el.requestFullscreen) await el.requestFullscreen({ navigationUI: 'hide' });
+    else if (el.webkitRequestFullscreen) el.webkitRequestFullscreen();
+    else throw new Error('unsupported');
+  } catch (e) {
+    ui.fullhelp = true; render();
+    return;
+  }
+  try { await screen.orientation.lock('landscape'); } catch (e) { /* 固定できない端末はそのまま */ }
+}
+document.addEventListener('fullscreenchange', () => render());
+document.addEventListener('webkitfullscreenchange', () => render());
+
+function fullHelpHTML() {
+  return `<div class="sheet-bg" data-act="fullhelp-close"><div class="sheet fullhelp" data-stop="1"><h2>全画面で遊ぶには</h2>
+    <p class="muted">iPhoneのSafariは、ページから全画面に切り替えることができません。ホーム画面に追加して、そこから開くと、Safariのバーが消えて全画面になります。</p>
+    <ol><li>Safariの下（または上）にある共有ボタン（四角から矢印が出たアイコン）を押す</li>
+      <li>「ホーム画面に追加」を選び、「追加」を押す</li>
+      <li>ホーム画面にできた「社内麻雀卓」のアイコンから開く</li></ol>
+    <p class="muted">画面の自動回転をオフにしていても、iPhoneを左に倒して持てば横画面で遊べます。</p>
+    <div class="btnrow"><button data-act="fullhelp-close">閉じる</button></div></div></div>`;
+}
+
 function yakuHTML() {
   return `<div class="sheet-bg" data-act="yaku-close"><div class="sheet" data-stop="1"><h2>役一覧</h2>
     <div class="yaku">${YAKU.map(([h, list]) => `<span>${list}</span><span>${h}</span>`).join('')}</div>
@@ -552,7 +600,7 @@ function render() {
   if (!S) { app.innerHTML = `<div class="lobby"><h1>社内麻雀卓</h1><p class="lead">部屋 ${esc(code)} に接続しています…</p>${netNote()}<button class="ghost" data-act="leave">やめる</button></div>`; return; }
   if (S.phase === 'lobby') { app.innerHTML = lobbyHTML(); return; }
   app.classList.add('is-game');
-  app.innerHTML = gameHTML() + sheetHTML();
+  app.innerHTML = gameHTML();
 }
 
 function netNote() {
@@ -578,6 +626,8 @@ function homeHTML() {
     <button class="hot" data-act="create">部屋を作る（このiPhoneが親機）</button>
     ${resume}
     <button class="ghost" data-act="practice">1人で練習する（CPU 3人）</button>
+    ${isFull() ? '' : '<button class="ghost" data-act="full">全画面で遊ぶ</button>'}
+    ${ui.fullhelp ? fullHelpHTML() : ''}
     <p class="rules">親機は対局を進める役です。親機の人は対局中このページを開いたままにしてください。閉じたりスリープしたりすると、全員の対局が止まります（開き直せば続きから再開できます）。</p>
     <p class="rules">ルール：25000点持ち30000点返し、ウマ10-20。喰いタンあり、後付けあり、ダブロンあり（供託・本場は上家取り）、赤ドラは設定による。トビ終了あり、オーラスの親はアガリやめ・テンパイやめ。九種九牌・四風連打などの途中流局と流し満貫はありません。</p>
   </div>`;
@@ -663,11 +713,11 @@ function gameHTML() {
     ${plate(rel(2), 'top')}${plate(rel(3), 'left')}${plate(rel(1), 'right')}
     <div class="info"><div class="dora">${dora}</div>
       <div class="cnt"><span>${S.honba}本場</span><span><i class="stick"></i>×${S.kyotaku}</span></div>${netDot}</div>
-    <div class="tops"><button class="small ghost" data-act="yaku">役一覧</button><button class="small ghost" data-act="menu">メニュー</button></div>
+    <div class="tops">${isFull() ? '' : '<button class="small ghost" data-act="full">全画面</button>'}<button class="small ghost" data-act="yaku">役一覧</button><button class="small ghost" data-act="menu">メニュー</button></div>
     ${me >= 0 ? `<div class="toggles">${toggles}</div>` : ''}
     ${me >= 0 ? plate(me, 'me') + mineHTML(me) : `<p class="spect">観戦中です。手牌は見えません。</p>`}
-  </div>
-  <div class="rotate"><div><b>iPhoneを横向きにしてください</b><span>対局画面は横向き用です。</span></div></div>`;
+    ${sheetHTML()}
+  </div>`;
 }
 
 function mineHTML(me) {
@@ -724,6 +774,7 @@ function claimHTML(me) {
 function sheetHTML() {
   if (ui.menu) return menuHTML();
   if (ui.yaku) return yakuHTML();
+  if (ui.fullhelp) return fullHelpHTML();
   if (S.phase === 'result') return resultHTML();
   if (S.phase === 'end') return endHTML();
   return '';
@@ -855,6 +906,8 @@ function onAct(a, ds) {
     }
     case 'menu': ui.menu = true; return render();
     case 'menu-close': ui.menu = false; return render();
+    case 'full': return goFull();
+    case 'fullhelp-close': ui.fullhelp = false; return render();
     case 'yaku': ui.yaku = true; return render();
     case 'yaku-close': ui.yaku = false; return render();
     case 'auto':
