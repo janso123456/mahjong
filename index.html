@@ -498,7 +498,8 @@ function viewSeat() { const m = mySeat(); return m >= 0 ? m : 0; }
 function nameOf(seat) {
   const st = S.seats[seat];
   if (!st.uid) return st.bot ? (st.name || 'CPU') : '空席';
-  return (st.name || '名無し') + (st.uid === myPid ? '（あなた）' : '');
+  const n = st.name || '名無し';
+  return n + (st.uid === myPid && n !== 'あなた' ? '（あなた）' : '');
 }
 
 /* ---------- 牌の描画 ---------- */
