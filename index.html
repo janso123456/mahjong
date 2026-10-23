@@ -146,7 +146,7 @@ html:has(body.in-game) { overflow: hidden; }
   background-repeat: no-repeat; background-position: left bottom; background-size: contain; pointer-events: none;
   filter: drop-shadow(0 0 18px rgba(255, 170, 60, .35)) drop-shadow(0 6px 10px rgba(0, 0, 0, .6)); animation: mhCharaIn .7s cubic-bezier(.2, .8, .2, 1) both; }
 .mh-who { z-index: 2; }
-.mh-chars { display: flex; gap: 8px; overflow-x: auto; padding: 4px 2px 8px; scrollbar-width: thin; }
+.mh-chars { position: relative; display: flex; gap: 8px; overflow-x: auto; padding: 4px 2px 8px; scrollbar-width: thin; }
 .mh-char { flex: none; width: 66px; height: 86px; padding: 0; min-height: 0; border-radius: 6px; background: rgba(0, 0, 0, .45);
   border: 1px solid #6b5426; box-shadow: none; display: grid; place-items: center; color: var(--mh-dim); font-weight: 500; font-size: 12px; }
 .mh-char .ch { width: 100%; height: 100%; background-repeat: no-repeat; background-position: center bottom; background-size: contain; }
@@ -876,10 +876,10 @@ function riverHTML(seat) {
 function render() {
   app.classList.remove('is-game');
   document.body.classList.remove('in-game');
-  if (role === 'home') { app.innerHTML = homeHTML(); startFx(); return; }
+  if (role === 'home') { app.innerHTML = homeHTML(); startFx(); showPicked(); return; }
   cancelAnimationFrame(fxRaf);
   if (!S) { app.innerHTML = `<div class="lobby"><h1>社内麻雀卓</h1><p class="lead">部屋 ${esc(code)} に接続しています…</p>${netNote()}<button class="ghost" data-act="leave">やめる</button></div>`; return; }
-  if (S.phase === 'lobby') { app.innerHTML = lobbyHTML(); return; }
+  if (S.phase === 'lobby') { app.innerHTML = lobbyHTML(); showPicked(); return; }
   app.classList.add('is-game');
   document.body.classList.add('in-game');
   app.innerHTML = gameHTML();
@@ -922,6 +922,13 @@ function charaGrid(list, act) {
   pickList = list;
   return `<div class="mh-chars"><button class="mh-char none ${!AV.mine ? 'on' : ''}" data-act="${act}" data-i="-1"><span>なし</span></button>` +
     list.map((src, i) => `<button class="mh-char ${AV.mine === src ? 'on' : ''}" data-act="${act}" data-i="${i}" aria-label="キャラ${i + 1}"><span class="ch ${avClass(src)}"></span></button>`).join('') + '</div>';
+}
+
+// キャラ一覧を開いたら、いま選んでいるキャラが見える位置まで横に送る
+function showPicked() {
+  const list = app.querySelector('.mh-chars');
+  const on = list && list.querySelector('.mh-char.on');
+  if (on) list.scrollLeft = on.offsetLeft - (list.clientWidth - on.offsetWidth) / 2;
 }
 
 // 部屋の中でキャラを選ぶ：親機の素材＋自分の素材
@@ -1355,9 +1362,11 @@ function onAct(a, ds) {
     case 'import': { const f = document.getElementById(ds.src || 'packfiles'); if (f) f.click(); return; }
     case 'clear-pack': AV.pack = []; savePack(); toast('キャラ素材を消しました'); return render();
     case 'pick-own': {
+      // 画面を描き直すと一覧が先頭に戻るので、選択の印だけ付け替える
       const i = +ds.i;
       setMine(i < 0 ? null : pickList[i]);
-      return render();
+      document.querySelectorAll('.mh-char').forEach((b) => b.classList.toggle('on', +b.dataset.i === i));
+      return;
     }
     case 'picker': ui.picker = true; return render();
     case 'picker-close': ui.picker = false; return render();
