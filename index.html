@@ -120,6 +120,8 @@ input:focus-visible { outline: 2px solid var(--gold); outline-offset: 2px; }
   display: flex; align-items: center; gap: 10px; padding: 6px 14px 6px 6px; border: 1px solid rgba(216, 178, 90, .55); border-radius: 4px;
   background: linear-gradient(90deg, rgba(40, 26, 12, .9), rgba(40, 26, 12, .4)); animation: mhFadeUp .5s ease-out .2s both; }
 .mh-who .av { width: 30px; height: 30px; font-size: 14px; }
+button.mh-who { font: inherit; color: inherit; text-align: left; min-height: 0; cursor: pointer; box-shadow: none; }
+button.mh-who:hover, button.mh-who:focus-visible { border-color: #ffd36b; box-shadow: 0 0 10px rgba(255, 211, 107, .45); outline: none; }
 .mh-who span { font-size: 10px; letter-spacing: .25em; color: var(--mh-gold); display: block; }
 .mh-who b { font-family: var(--f-disp); font-weight: 400; font-size: 17px; letter-spacing: .08em; color: #fbe7b0; }
 
@@ -896,7 +898,7 @@ function netNote() {
 let titleSeen = false;
 function homeView() {
   if (ui.home) return ui.home;
-  if (new URLSearchParams(location.search).get('room')) return 'join';
+  if (new URLSearchParams(location.search).get('room')) return setupDone() ? 'join' : 'name';
   return titleSeen ? 'menu' : 'title';
 }
 
@@ -951,8 +953,6 @@ function homeHTML() {
       saved ? ['resume', `前の部屋 ${saved.code} を再開`, '親機だった部屋を続きから再開します'] : null,
       ['practice', 'ひとりで練習', 'CPU 3人を相手に東風戦を打ちます'],
       isFull() ? null : ['full', '全画面で遊ぶ', '画面いっぱいに表示します'],
-      ['go-name', '名前とキャラ', `いまの名前：${myName || '未設定'}${AV.pack.length ? ` ・ キャラ素材 ${AV.pack.length}枚` : ''}`],
-      ['go-help', '遊び方・ルール', '親機の役目とルールを確認します'],
     ].filter(Boolean);
     panel = mhPanel('メインメニュー', `<div class="mh-list">${items.map(([a, l, s], i) =>
       `<button class="mh-item" style="--i:${i}" data-act="${a}"><span class="mh-cur">▶</span><span class="mh-lbl">${esc(l)}</span><span class="mh-sub">${esc(s)}</span></button>`).join('')}</div>`);
@@ -969,13 +969,7 @@ function homeHTML() {
       <div class="mh-packbtns"><button class="mh-btn ghost small" data-act="import" data-src="packfiles">「ファイル」から読み込む</button>
         <button class="mh-btn ghost small" data-act="import" data-src="packphotos">写真から読み込む</button>
         ${AV.pack.length ? '<button class="mh-btn ghost small" data-act="clear-pack">素材を全部消す</button>' : ''}</div>`,
-      `${myName ? '<button class="mh-btn ghost" data-act="home-back">もどる</button>' : ''}<button class="mh-btn" data-act="name-ok">決定</button>`);
-  } else if (view === 'help') {
-    panel = mhPanel('遊び方・ルール', `<div class="mh-help">
-      <p><b>部屋を作る人（親機）</b>が対局を進めます。親機の人は対局中このページを開いたままにしてください。閉じたりスリープしたりすると、全員の対局が止まります（開き直して「前の部屋を再開」で続きから再開できます）。</p>
-      <p>ほかの人は「部屋に参加する」で4桁の部屋番号を入れます。足りない席はCPUで埋められます。</p>
-      <p>25000点持ち30000点返し、ウマ10-20。喰いタン・後付け・ダブロンあり（供託・本場は上家取り）。赤ドラは部屋を作った人が選べます。トビ終了あり、オーラスの親はアガリやめ・テンパイやめ。九種九牌・四風連打などの途中流局と流し満貫はありません。</p></div>`,
-      `<button class="mh-btn" data-act="home-back">もどる</button>`);
+      `${setupDone() ? '<button class="mh-btn ghost" data-act="home-back">もどる</button>' : ''}<button class="mh-btn" data-act="name-ok">決定</button>`);
   }
 
   const title = view === 'title';
@@ -985,7 +979,7 @@ function homeHTML() {
     <div class="mh-logo ${title ? 'big' : 'small'}">${CREST}<div class="mh-title"><span class="mh-ja">社内麻雀卓</span><span class="mh-en">SHANAI MAHJONG ・ FOUR PLAYERS</span></div></div>
     ${!title && AV.mine ? `<div class="mh-chara ${avClass(AV.mine)}"></div>` : ''}
     ${title ? '<div class="mh-press">― タップしてはじめる ―</div>' : `<div class="mh-stage">${panel}</div>`}
-    ${!title && myName ? `<div class="mh-who">${avatarHTML(AV.mine, myName, 30)}<div><span>PLAYER</span><b>${esc(myName)}</b></div></div>` : ''}
+    ${!title && myName && view !== 'name' ? `<button class="mh-who" data-act="go-name" aria-label="名前とキャラを変える">${avatarHTML(AV.mine, myName, 30)}<div><span>PLAYER ・ タップで変更</span><b>${esc(myName)}</b></div></button>` : ''}
     <input type="file" id="packfiles" class="packinput" accept=".png,.jpg,.jpeg,.webp,.gif,.heic,image/png,image/jpeg,image/webp" multiple hidden>
     <input type="file" id="packphotos" class="packinput" accept="image/*" multiple hidden>
     <div class="mh-foot">${title ? 'ログイン不要 ・ iPhoneを横にして遊べます' : ''}</div>
@@ -1303,8 +1297,11 @@ app.addEventListener('click', (e) => {
 });
 
 // 名前がまだなら、先に名前を決めてもらってから続きをする
+// 最初の起動では、名前とキャラを決めてからメニューへ進む
+function setupDone() { return !!myName && store.get('mj.setup') === '1'; }
+
 function needName(next) {
-  if (myName) return false;
+  if (setupDone()) return false;
   ui.home = 'name'; ui.afterName = next; render();
   return true;
 }
@@ -1323,15 +1320,16 @@ function onTile(id) {
 
 function onAct(a, ds) {
   switch (a) {
-    case 'title-start': titleSeen = true; ui.home = myName ? 'menu' : 'name'; return render();
+    case 'title-start': titleSeen = true; ui.home = setupDone() ? 'menu' : 'name'; return render();
     case 'home-back': ui.home = 'menu'; ui.afterName = null; return render();
     case 'go-join': ui.home = 'join'; return render();
     case 'go-name': ui.home = 'name'; ui.afterName = null; return render();
-    case 'go-help': ui.home = 'help'; return render();
     case 'name-ok': {
       if (!myName) return toast('名前を入れてください');
+      store.set('mj.setup', '1');
       const next = ui.afterName;
-      ui.afterName = null; ui.home = 'menu';
+      // 参加用リンクから来た人は、名前を決めたらそのまま参加画面へ
+      ui.afterName = null; ui.home = new URLSearchParams(location.search).get('room') ? 'join' : 'menu';
       if (next) return onAct(next, {});
       return render();
     }
