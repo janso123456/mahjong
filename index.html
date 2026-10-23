@@ -1,0 +1,700 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="theme-color" content="#0d2629">
+<title>社内麻雀卓</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Zen+Antique&family=Zen+Kaku+Gothic+New:wght@500;700&display=swap">
+<link rel="stylesheet" href="style.css">
+<style>
+[hidden] { display: none !important; }
+body { margin: 0; padding-top: max(8px, env(safe-area-inset-top, 0px)); padding-bottom: max(16px, env(safe-area-inset-bottom, 0px)); }
+input {
+  font: inherit; font-size: 16px; color: var(--ink); background: var(--ivory); border: 0; border-radius: 10px;
+  padding: 10px 12px; min-height: 44px; width: 100%; box-sizing: border-box;
+}
+input:focus-visible { outline: 2px solid var(--gold); outline-offset: 2px; }
+.code { font-family: var(--f-disp); font-size: 52px; letter-spacing: .18em; line-height: 1; font-variant-numeric: tabular-nums; }
+.codebox { background: var(--rail); border-radius: 14px; padding: 16px; display: flex; flex-direction: column; gap: 10px; align-items: flex-start; }
+.join { display: flex; gap: 8px; }
+.join input { flex: 1; letter-spacing: .2em; text-align: center; }
+.join button { flex: none; }
+.dot { width: 8px; height: 8px; border-radius: 50%; background: #6fd39b; display: inline-block; flex: none; }
+.dot.off { background: #ff9a85; }
+.net { font-size: 11px; color: var(--muted); display: flex; gap: 5px; align-items: center; }
+.or { color: var(--muted); font-size: 12px; text-align: center; letter-spacing: .1em; }
+</style>
+</head>
+<body>
+<div id="app"></div>
+<div id="toast" class="toast" hidden></div>
+
+<script src="https://cdn.jsdelivr.net/npm/peerjs@1.5.4/dist/peerjs.min.js"></script>
+<script src="engine.js"></script>
+<script>
+'use strict';
+const PREFIX = 'shanai-mj-7k2q-';      // PeerJSの公開サーバーで他と重ならないための接頭辞
+const WN = MJ.WIND_NAMES;
+const app = document.getElementById('app');
+
+const store = {
+  get(k) { try { return localStorage.getItem(k); } catch (e) { return null; } },
+  set(k, v) { try { localStorage.setItem(k, v); } catch (e) { /* 保存できなくても動く */ } },
+  del(k) { try { localStorage.removeItem(k); } catch (e) { /* 同上 */ } },
+};
+let myPid = store.get('mj.pid');
+if (!myPid) { myPid = 'p' + Math.random().toString(36).slice(2, 12); store.set('mj.pid', myPid); }
+let myName = store.get('mj.name') || '';
+
+// role: home | host | client | local
+let role = 'home';
+let code = '';
+let HS = null;          // 親機が持つ完全な状態
+let S = null;           // 画面に出す状態（自分の手牌以外は伏せてある）
+let peer = null, hostConn = null;
+const conns = new Map(); // 親機: pid -> 接続
+let net = 'ok';          // ok | connecting | lost
+let leaving = false;
+let ui = { sel: null, riichi: false, menu: false };
+let botTimer = null, retryTimer = null, wakeLock = null;
+
+const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+function toast(msg) {
+  const el = document.getElementById('toast');
+  el.textContent = msg; el.hidden = false;
+  clearTimeout(toast.t); toast.t = setTimeout(() => { el.hidden = true; }, 2800);
+}
+
+/* ---------- 親機：状態を持ち、操作を受け付け、各自に見せてよい分だけ送る ---------- */
+
+function viewFor(full, seat) {
+  const V = MJ.clone(full);
+  if (V.phase === 'lobby' || V.phase === 'end') return V;
+  V.wall = V.wall.map(() => 0);
+  V.dead = V.dead.map((x, i) => (i >= 4 && i < 4 + V.doraCount ? x : null));
+  V.players.forEach((p, i) => { if (i !== seat) p.hand = p.hand.map(() => null); });
+  if (V.turn !== seat) V.drawn = null;
+  if (V.claim) {
+    const mine = V.claim.options[seat];
+    V.claim.options = mine ? { [seat]: mine } : {};
+    const r = V.claim.responses[seat];
+    V.claim.responses = r ? { [seat]: r } : {};
+  }
+  return V;
+}
+
+function hostSeatOf(pid) { return HS.seats.findIndex((s) => s.uid === pid); }
+
+function hostCommit() {
+  HS.seq++;
+  for (const [pid, c] of conns) {
+    if (c.open) c.send({ t: 'state', S: viewFor(HS, hostSeatOf(pid)) });
+  }
+  if (role === 'host') store.set('mj.hostroom', JSON.stringify({ code, HS }));
+  setView(viewFor(HS, hostSeatOf(myPid)));
+  scheduleBots();
+}
+
+// 親機に届いた操作（親機自身の操作もここを通る）
+function hostHandle(pid, msg) {
+  const seat = hostSeatOf(pid);
+  const isHost = pid === myPid;
+  const lobbyOnly = () => { if (HS.phase !== 'lobby') throw new Error('対局中は変更できません'); };
+  const hostOnly = () => { if (!isHost) throw new Error('親機の人だけが操作できます'); };
+  switch (msg.cmd) {
+    case 'apply': {
+      if (seat < 0) throw new Error('席に座っていません');
+      const a = Object.assign({}, msg.a, { seat });
+      MJ.apply(HS, a);
+      break;
+    }
+    case 'ready': {
+      if (HS.phase !== 'result' || seat < 0) return;
+      HS.ready = HS.ready || {};
+      HS.ready[seat] = true;
+      const humans = HS.seats.map((s, i) => (s.uid && !s.bot ? i : -1)).filter((i) => i >= 0);
+      if (humans.every((i) => HS.ready[i])) MJ.apply(HS, { type: 'next' });
+      break;
+    }
+    case 'next': if (HS.phase !== 'result') return; MJ.apply(HS, { type: 'next' }); break;
+    case 'togglebot': {
+      const t = HS.seats[msg.seat];
+      if (!t || !t.uid) return;
+      if (!isHost && msg.seat !== seat) throw new Error('ほかの人の代打ちは親機の人が切り替えます');
+      t.bot = !t.bot;
+      break;
+    }
+    case 'botseat': hostOnly(); lobbyOnly(); if (!HS.seats[msg.seat].uid) Object.assign(HS.seats[msg.seat], { bot: true, name: 'CPU ' + 'ABCD'[msg.seat] }); break;
+    case 'clearseat': hostOnly(); lobbyOnly(); if (msg.seat !== hostSeatOf(myPid)) HS.seats[msg.seat] = { uid: null, bot: false, name: '' }; break;
+    case 'rule': hostOnly(); lobbyOnly(); HS.rules[msg.k] = msg.v; break;
+    case 'start':
+      hostOnly(); lobbyOnly();
+      if (!HS.seats.every((s) => s.uid || s.bot)) throw new Error('4席すべて埋めてください');
+      MJ.startGame(HS);
+      break;
+    case 'again': hostOnly(); if (HS.phase !== 'end') return; HS.seats.forEach((s) => { if (s.uid) s.bot = false; }); MJ.startGame(HS); break;
+    case 'tolobby': {
+      hostOnly();
+      const seats = HS.seats.map((s) => ({ uid: s.uid, bot: s.uid ? false : s.bot, name: s.name, online: s.online }));
+      const fresh = MJ.newGame(HS.rules);
+      fresh.seats = seats; fresh.seq = HS.seq; fresh.hostSeat = HS.hostSeat;
+      HS = fresh;
+      break;
+    }
+    default: return;
+  }
+  hostCommit();
+}
+
+function hostJoin(pid, name, conn) {
+  let seat = hostSeatOf(pid);
+  if (seat < 0) {
+    if (HS.phase !== 'lobby') { conn.send({ t: 'err', msg: '対局中のため観戦で入ります' }); }
+    else {
+      seat = HS.seats.findIndex((s) => !s.uid && !s.bot);
+      if (seat < 0) { conn.send({ t: 'err', msg: '満席です' }); }
+      else HS.seats[seat] = { uid: pid, bot: false, name: '' };
+    }
+  }
+  if (seat >= 0) { HS.seats[seat].name = (name || '').slice(0, 12) || '名無し'; HS.seats[seat].online = true; }
+  conns.set(pid, conn);
+  hostCommit();
+}
+
+// CPUの手番と、立直後のツモ切りは親機が進める
+function scheduleBots() {
+  clearTimeout(botTimer);
+  if (!HS || !['turn', 'claim'].includes(HS.phase)) return;
+  let a = MJ.pendingBotAction(HS);
+  if (!a && HS.phase === 'turn') {
+    const p = HS.players[HS.turn];
+    if (p.riichi) {
+      const o = MJ.turnOptions(HS, HS.turn);
+      if (!o.tsumo && !o.kans.length) a = { type: 'discard', seat: HS.turn, id: HS.drawn };
+    }
+  }
+  if (!a) return;
+  const seq = HS.seq;
+  botTimer = setTimeout(() => {
+    if (HS.seq !== seq) return;
+    try { MJ.apply(HS, MJ.pendingBotAction(HS) || a); hostCommit(); } catch (e) { console.error(e); }
+  }, 750);
+}
+
+/* ---------- 通信 ---------- */
+
+function newCode() { return String(Math.floor(1000 + Math.random() * 9000)); }
+
+function createRoom(resume) {
+  if (!myName) return toast('名前を入れてください');
+  role = 'host'; leaving = false;
+  if (resume) { code = resume.code; HS = resume.HS; }
+  else {
+    code = newCode();
+    HS = MJ.newGame({ length: 'hanchan', aka: true });
+    HS.seats[0] = { uid: myPid, bot: false, name: myName, online: true };
+  }
+  const me = hostSeatOf(myPid);
+  if (me >= 0) HS.seats[me].name = myName;
+  HS.hostSeat = me;
+  HS.seats.forEach((s) => { if (s.uid && s.uid !== myPid) s.online = false; });
+  openHostPeer(0, !!resume);
+  hostCommit();
+  history.replaceState(null, '', '?room=' + code);
+}
+
+function openHostPeer(tries, resuming) {
+  net = 'connecting'; render();
+  peer = new Peer(PREFIX + code);
+  peer.on('open', () => { net = 'ok'; render(); });
+  peer.on('connection', (c) => {
+    c.on('data', (msg) => {
+      if (!msg || typeof msg !== 'object') return;
+      if (msg.t === 'hello') return hostJoin(String(msg.pid), String(msg.name || ''), c);
+      const pid = [...conns].find(([, x]) => x === c);
+      if (!pid) return;
+      try { hostHandle(pid[0], msg); } catch (e) { c.send({ t: 'err', msg: e.message }); }
+    });
+    c.on('close', () => {
+      for (const [pid, x] of conns) if (x === c) {
+        conns.delete(pid);
+        const s = hostSeatOf(pid);
+        if (s >= 0) { HS.seats[s].online = false; hostCommit(); }
+      }
+    });
+  });
+  peer.on('disconnected', () => { if (!leaving) { net = 'connecting'; render(); setTimeout(() => peer && !peer.destroyed && peer.reconnect(), 1000); } });
+  peer.on('error', (e) => {
+    if (e.type === 'unavailable-id') {
+      peer.destroy();
+      // 再開時は前の接続がサーバーに残っていることがあるので待つ。新規なら番号を変える
+      if (!resuming) { code = newCode(); history.replaceState(null, '', '?room=' + code); render(); }
+      if (tries < 10) setTimeout(() => openHostPeer(tries + 1, resuming), resuming ? 3000 : 200);
+      else { net = 'lost'; render(); toast('部屋を開けませんでした。ページを開き直してください'); }
+      return;
+    }
+    if (e.type === 'network' || e.type === 'server-error' || e.type === 'socket-error') { net = 'lost'; render(); }
+  });
+}
+
+function joinRoom(c) {
+  if (!myName) return toast('名前を入れてください');
+  if (!/^\d{4}$/.test(c)) return toast('部屋番号は4桁の数字です');
+  role = 'client'; code = c; leaving = false; S = null;
+  history.replaceState(null, '', '?room=' + code);
+  net = 'connecting'; render();
+  peer = new Peer();
+  peer.on('open', connectHost);
+  peer.on('disconnected', () => { if (!leaving) setTimeout(() => peer && !peer.destroyed && peer.reconnect(), 1000); });
+  peer.on('error', (e) => {
+    if (e.type === 'peer-unavailable') { net = 'lost'; render(); retry(4000); return; }
+    if (e.type === 'network' || e.type === 'server-error' || e.type === 'socket-error') { net = 'lost'; render(); }
+  });
+}
+
+function connectHost() {
+  if (leaving || !peer || peer.destroyed) return;
+  if (peer.disconnected) { peer.reconnect(); retry(2000); return; }
+  net = S ? 'connecting' : net; render();
+  const c = peer.connect(PREFIX + code, { reliable: true, serialization: 'json' });
+  hostConn = c;
+  c.on('open', () => { net = 'ok'; c.send({ t: 'hello', pid: myPid, name: myName }); render(); });
+  c.on('data', (msg) => {
+    if (msg.t === 'state') setView(msg.S);
+    if (msg.t === 'err') toast(msg.msg);
+  });
+  c.on('close', () => { if (hostConn === c && !leaving) { net = 'lost'; render(); retry(2000); } });
+}
+
+function retry(ms) {
+  clearTimeout(retryTimer);
+  retryTimer = setTimeout(() => { if (role === 'client' && !leaving && !(hostConn && hostConn.open)) connectHost(); }, ms);
+}
+
+function send(msg) {
+  if (role === 'host' || role === 'local') {
+    try { hostHandle(myPid, msg); } catch (e) { toast(e.message); }
+  } else if (hostConn && hostConn.open) hostConn.send(msg);
+  else toast('親機とつながっていません。再接続を待ってください');
+}
+
+function leaveRoom() {
+  leaving = true;
+  clearTimeout(botTimer); clearTimeout(retryTimer);
+  if (peer) { try { peer.destroy(); } catch (e) { /* 閉じるだけ */ } }
+  peer = null; hostConn = null; conns.clear();
+  if (role === 'host') store.del('mj.hostroom');
+  role = 'home'; S = null; HS = null; ui = { sel: null, riichi: false, menu: false };
+  history.replaceState(null, '', location.pathname);
+  render();
+}
+
+function startPractice() {
+  role = 'local'; leaving = false;
+  HS = MJ.newGame({ length: 'tonpu', aka: true });
+  HS.seats = [{ uid: myPid, bot: false, name: myName || 'あなた' }, { uid: null, bot: true, name: 'CPU A' }, { uid: null, bot: true, name: 'CPU B' }, { uid: null, bot: true, name: 'CPU C' }];
+  MJ.startGame(HS);
+  hostCommit();
+}
+
+// iPhoneが眠らないように（対応していない端末では何もしない）
+async function keepAwake() {
+  try { if ('wakeLock' in navigator && !wakeLock && document.visibilityState === 'visible') { wakeLock = await navigator.wakeLock.request('screen'); wakeLock.addEventListener('release', () => { wakeLock = null; }); } } catch (e) { /* 拒否されても続ける */ }
+}
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState !== 'visible') return;
+  if (role === 'host' || role === 'client') keepAwake();
+  if (peer && !peer.destroyed && peer.disconnected) peer.reconnect();
+  if (role === 'client' && !(hostConn && hostConn.open)) retry(300);
+});
+
+/* ---------- 画面に出す状態 ---------- */
+
+let lastSeq = -1;
+function setView(v) {
+  S = v;
+  if (S && S.seq !== lastSeq) { lastSeq = S.seq; ui.sel = null; ui.riichi = false; }
+  if (S && S.phase !== 'lobby') keepAwake();
+  render();
+}
+
+function mySeat() { return S ? S.seats.findIndex((s) => s.uid === myPid) : -1; }
+function viewSeat() { const m = mySeat(); return m >= 0 ? m : 0; }
+function nameOf(seat) {
+  const st = S.seats[seat];
+  if (!st.uid) return st.bot ? (st.name || 'CPU') : '空席';
+  return (st.name || '名無し') + (st.uid === myPid ? '（あなた）' : '');
+}
+
+/* ---------- 牌の描画 ---------- */
+
+const MAN = '一二三四五六七八九', PIN = '①②③④⑤⑥⑦⑧⑨';
+function tile(id, cls) {
+  cls = cls || '';
+  if (id === null || id === undefined) return `<span class="t back ${cls}"></span>`;
+  const k = id >> 2;
+  const red = S && S.rules.aka && MJ.RED_IDS.includes(id);
+  let suit, g, lab = '', extra = '';
+  if (k < 9) { suit = 'm'; g = MAN[k]; lab = '萬'; }
+  else if (k < 18) { suit = 'p'; g = PIN[k - 9]; lab = '筒'; }
+  else if (k < 27) { suit = 's'; g = String(k - 17); lab = '索'; }
+  else {
+    suit = 'z'; g = '東南西北 發中'[k - 27];
+    if (k === 31) { g = ''; extra = 'haku'; }
+    if (k === 32) extra = 'hatsu';
+    if (k === 33) extra = 'chun';
+  }
+  return `<span class="t ${suit} ${extra} ${red ? 'red' : ''} ${cls}" data-id="${id}"><b>${g}</b><i>${lab}</i></span>`;
+}
+
+function meldHTML(m, owner) {
+  const rel = (m.from - owner + 4) % 4;
+  if (m.type === 'ankan') return `<span class="meld">${tile(null, 'sm')}${tile(m.tiles[1], 'sm')}${tile(m.tiles[2], 'sm')}${tile(null, 'sm')}</span>`;
+  const others = m.tiles.filter((x) => x !== m.called && x !== m.added);
+  const sideIdx = rel === 3 ? 0 : rel === 2 ? 1 : others.length;
+  const parts = others.map((x) => tile(x, 'sm'));
+  parts.splice(Math.min(sideIdx, parts.length), 0, tile(m.called, 'sm side'));
+  if (m.added !== undefined) parts.push(tile(m.added, 'sm side'));
+  return `<span class="meld">${parts.join('')}</span>`;
+}
+
+function riverHTML(seat) {
+  const p = S.players[seat];
+  const rows = [p.river.slice(0, 6), p.river.slice(6, 12), p.river.slice(12)];
+  const last = S.lastDiscard && S.lastDiscard.seat === seat && S.phase === 'claim';
+  return rows.map((row, ri) => `<div class="row">${row.map((r, i) => {
+    const isLast = last && ri * 6 + i === p.river.length - 1;
+    return tile(r.id, 'sm' + (r.riichi ? ' side' : '') + (r.called ? ' dim' : '') + (isLast ? ' hl' : ''));
+  }).join('')}</div>`).join('');
+}
+
+/* ---------- 画面 ---------- */
+
+function render() {
+  if (role === 'home') { app.innerHTML = homeHTML(); return; }
+  if (!S) { app.innerHTML = `<div class="lobby"><h1>社内麻雀卓</h1><p class="lead">部屋 ${esc(code)} に接続しています…</p>${netNote()}<button class="ghost" data-act="leave">やめる</button></div>`; return; }
+  if (S.phase === 'lobby') { app.innerHTML = lobbyHTML(); return; }
+  app.innerHTML = gameHTML() + sheetHTML();
+}
+
+function netNote() {
+  if (net === 'ok') return '';
+  if (net === 'connecting') return `<p class="muted">接続しています…</p>`;
+  return role === 'client'
+    ? `<p class="muted">親機とつながっていません。親機の人がこのページを開いているか確認してください。自動でつなぎ直します。</p>`
+    : `<p class="muted">接続が切れています。自動でつなぎ直します。</p>`;
+}
+
+function homeHTML() {
+  const q = new URLSearchParams(location.search).get('room') || '';
+  let saved = null;
+  try { saved = JSON.parse(store.get('mj.hostroom') || 'null'); } catch (e) { saved = null; }
+  const resume = saved && saved.HS && saved.HS.phase !== 'end'
+    ? `<button class="ghost" data-act="resume">前の部屋 ${esc(saved.code)} を再開する（親機）</button>` : '';
+  return `<div class="lobby">
+    <div><h1>社内麻雀卓</h1><p class="lead">それぞれのiPhoneで同じ卓に座って打てる、4人打ちのリーチ麻雀です。役と点数は自動で計算します。ログインはいりません。</p></div>
+    <label class="field"><span>あなたの名前</span><input id="name" maxlength="12" placeholder="例：大久保" value="${esc(myName)}" autocomplete="nickname"></label>
+    <section class="field"><span>部屋番号を聞いている人</span>
+      <div class="join"><input id="code" inputmode="numeric" maxlength="4" placeholder="4桁" value="${esc(q)}"><button class="gold" data-act="join">参加する</button></div></section>
+    <div class="or">または</div>
+    <button class="hot" data-act="create">部屋を作る（このiPhoneが親機）</button>
+    ${resume}
+    <button class="ghost" data-act="practice">1人で練習する（CPU 3人）</button>
+    <p class="rules">親機は対局を進める役です。親機の人は対局中このページを開いたままにしてください。閉じたりスリープしたりすると、全員の対局が止まります（開き直せば続きから再開できます）。</p>
+    <p class="rules">ルール：25000点持ち30000点返し、ウマ10-20。喰いタンあり、後付けあり、ダブロンあり（供託・本場は上家取り）、赤ドラは設定による。トビ終了あり、オーラスの親はアガリやめ・テンパイやめ。九種九牌・四風連打などの途中流局と流し満貫はありません。</p>
+  </div>`;
+}
+
+function lobbyHTML() {
+  const host = role === 'host';
+  const filled = S.seats.every((s) => s.uid || s.bot);
+  const link = location.origin + location.pathname + '?room=' + code;
+  return `<div class="lobby">
+    <div class="codebox"><span class="muted">部屋番号</span><span class="code">${esc(code)}</span>
+      <span class="muted">このページのURLと部屋番号をほかの3人に伝えてください。</span>
+      <button class="small" data-act="copy" data-link="${esc(link)}">参加用リンクをコピー</button></div>
+    ${netNote()}
+    <section class="field"><span>席（4人そろったら開始）</span>
+    <div class="seats">${S.seats.map((s, i) => {
+      let btns = '';
+      if (host) {
+        if (!s.uid && !s.bot) btns = `<button class="small ghost" data-act="botseat" data-seat="${i}">CPUを入れる</button>`;
+        else if (s.uid !== myPid) btns = `<button class="small ghost" data-act="clearseat" data-seat="${i}">空ける</button>`;
+      }
+      const dot = s.uid ? `<span class="dot ${s.uid === myPid || s.online ? '' : 'off'}"></span>` : '';
+      return `<div class="seat ${s.uid === myPid ? 'me' : ''}"><div class="no">席 ${i + 1}${s.uid && i === hostSeatIndex() ? '・親機' : ''}</div><div class="nm" style="display:flex;gap:6px;align-items:center">${dot}${esc(nameOf(i))}</div><div class="btns">${btns}</div></div>`;
+    }).join('')}</div></section>
+    ${host ? `
+    <section class="field"><span>長さ</span><div class="seg">
+      <button class="${S.rules.length === 'tonpu' ? 'on' : ''}" data-act="rule" data-k="length" data-v="tonpu">東風戦</button>
+      <button class="${S.rules.length === 'hanchan' ? 'on' : ''}" data-act="rule" data-k="length" data-v="hanchan">半荘戦</button></div></section>
+    <section class="field"><span>赤ドラ</span><div class="seg">
+      <button class="${S.rules.aka ? 'on' : ''}" data-act="rule" data-k="aka" data-v="1">あり（各1枚）</button>
+      <button class="${!S.rules.aka ? 'on' : ''}" data-act="rule" data-k="aka" data-v="0">なし</button></div></section>
+    <button class="hot" data-act="start" ${filled ? '' : 'disabled'}>対局開始</button>`
+    : `<p class="muted">${S.rules.length === 'tonpu' ? '東風戦' : '半荘戦'}・赤ドラ${S.rules.aka ? 'あり' : 'なし'}。親機の人が開始するのを待っています。</p>`}
+    <button class="ghost" data-act="leave">${host ? '部屋を閉じる' : '部屋から出る'}</button>
+  </div>`;
+}
+
+function hostSeatIndex() { return role === 'host' ? mySeat() : (S.hostSeat !== undefined ? S.hostSeat : 0); }
+
+function gameHTML() {
+  const v = viewSeat(), me = mySeat();
+  const d = MJ.dealerOf(S);
+  const rel = (i) => (v + i) % 4;
+  const doraInd = MJ.doraIndicators(S);
+  const turnSeat = S.phase === 'turn' ? S.turn : -1;
+  const dora = [0, 1, 2, 3, 4].map((i) => tile(i < doraInd.length ? doraInd[i] : null, 'sm')).join('');
+
+  const opp = (s) => {
+    const p = S.players[s];
+    const st = S.seats[s];
+    const off = st.uid && st.uid !== myPid && role !== 'local' && !st.online;
+    return `<div class="opp ${turnSeat === s ? 'turn' : ''}">
+      <span class="wind ${s === d ? 'dealer' : ''}">${WN[MJ.seatWind(S, s) - 27]}</span>
+      <div class="who"><span class="nm">${esc(nameOf(s))}</span>
+      <span class="sub">${S.scores[s].toLocaleString()}点 · 手牌${p.hand.length}枚 ${p.riichi ? '<span class="tag">リーチ</span>' : ''} ${st.bot && st.uid ? '<span class="tag cpu">CPU代打ち</span>' : ''} ${off ? '<span class="tag cpu">切断中</span>' : ''}</span></div>
+      <div class="melds">${p.melds.map((m) => meldHTML(m, s)).join('')}</div></div>`;
+  };
+  const sc = (i) => {
+    const s = rel(i);
+    return `<div class="sc s${i} ${s === d ? 'dealer' : ''} ${turnSeat === s ? 'turn' : ''}"><span class="w">${WN[MJ.seatWind(S, s) - 27]}</span><span>${S.scores[s]}</span>${S.players[s].riichi ? '<span class="stick"></span>' : ''}</div>`;
+  };
+  const table = `<div class="table">
+    <div class="cell"></div><div class="cell"><div class="river r-top">${riverHTML(rel(2))}</div></div><div class="cell"></div>
+    <div class="cell"><div class="river r-left">${riverHTML(rel(3))}</div></div>
+    <div class="center">${sc(0)}${sc(1)}${sc(2)}${sc(3)}
+      <div class="mid"><div class="rd">${MJ.roundLabel(S)}</div><div class="rest">${S.honba}本場 · 供託${S.kyotaku}</div><div class="rest">残り ${S.wall.length}</div></div></div>
+    <div class="cell"><div class="river r-right">${riverHTML(rel(1))}</div></div>
+    <div class="cell"></div><div class="cell"><div class="river r-bottom">${riverHTML(rel(0))}</div></div><div class="cell"></div>
+  </div>`;
+  const status = role === 'local' ? '' : `<span class="net"><span class="dot ${net === 'ok' ? '' : 'off'}"></span>${net === 'ok' ? '部屋 ' + esc(code) : '再接続中'}</span>`;
+  return `<div class="bar"><span class="lbl">ドラ表示</span><div class="dora">${dora}</div><span class="grow"></span>${status}
+      <button class="small ghost" data-act="menu">メニュー</button></div>
+    <div class="opps">${opp(rel(2))}${opp(rel(3))}${opp(rel(1))}</div>
+    ${table}
+    ${me >= 0 ? mineHTML(me) : `<p class="muted" style="text-align:center">観戦中です。手牌は見えません。</p>`}`;
+}
+
+function mineHTML(me) {
+  const p = S.players[me];
+  const st = S.seats[me];
+  const myTurn = S.phase === 'turn' && S.turn === me && !st.bot;
+  const o = myTurn ? MJ.turnOptions(S, me) : null;
+  const d = MJ.dealerOf(S);
+  let hand = p.hand.slice();
+  let drawn = null;
+  if (S.phase === 'turn' && S.turn === me && S.drawn !== null) { drawn = S.drawn; hand = hand.filter((x) => x !== drawn); }
+  hand.sort((a, b) => a - b);
+  const allowed = o ? (ui.riichi ? o.discardable.filter((id) => o.riichi.includes(id >> 2)) : o.discardable) : [];
+  const tcls = (id) => {
+    if (!myTurn) return '';
+    let c = allowed.includes(id) ? (ui.riichi ? 'ok' : '') : 'no';
+    if (ui.sel === id) c += ' sel';
+    return c;
+  };
+  const tiles = hand.map((id) => tile(id, tcls(id))).join('') + (drawn !== null ? tile(drawn, 'drawn ' + tcls(drawn)) : '');
+
+  let actions = '';
+  if (st.bot) {
+    actions = `<span class="hint">CPUが代わりに打っています</span><button class="gold" data-act="togglebot" data-seat="${me}">自分で打つ</button>`;
+  } else if (S.phase === 'claim' && S.claim.options[me] && !S.claim.responses[me]) {
+    actions = claimHTML(me);
+  } else if (myTurn) {
+    const btns = [];
+    if (o.tsumo) btns.push(`<button class="hot" data-act="tsumo">ツモ</button>`);
+    if (o.riichi.length && !ui.riichi && !p.riichi) btns.push(`<button class="gold" data-act="riichi">リーチ</button>`);
+    if (ui.riichi) btns.push(`<span class="hint">リーチで切る牌を選んでください</span><button class="ghost" data-act="riichi-cancel">やめる</button>`);
+    for (const k of o.kans) btns.push(`<button data-act="kan" data-type="${k.type}" data-k="${k.k}">カン <span style="--tw:16px;display:inline-flex">${tile(k.k * 4 + 1, 'sm')}</span></button>`);
+    if (!ui.riichi) btns.push(`<span class="hint">${p.riichi ? 'ツモ切りします…' : ui.sel !== null ? 'もう一度タップで切ります' : '切る牌をタップ'}</span>`);
+    actions = btns.join('');
+  } else if (S.phase === 'claim') {
+    actions = `<span class="hint">ほかの人の選択を待っています</span>`;
+  } else {
+    actions = `<span class="hint">${esc(nameOf(S.turn))}の番です</span>`;
+  }
+
+  return `<div class="mine">
+    <div class="myinfo"><span class="wind ${me === d ? 'dealer' : ''}">${WN[MJ.seatWind(S, me) - 27]}</span>
+      <span class="nm">${S.scores[me].toLocaleString()}点</span>${p.riichi ? '<span class="tag">リーチ</span>' : ''}
+      ${p.riichi && MJ.isFuriten(p) ? '<span class="tag cpu">フリテン</span>' : ''}
+      <span class="grow"></span><div class="melds" style="--tw:20px">${p.melds.map((m) => meldHTML(m, me)).join('')}</div></div>
+    <div class="hand ${myTurn ? '' : 'wait'}">${tiles}</div>
+    <div class="actions">${actions}</div></div>`;
+}
+
+function claimHTML(me) {
+  const cl = S.claim;
+  const btns = cl.options[me].map((op, i) => {
+    if (op.t === 'ron') return `<button class="hot" data-act="claim" data-i="${i}">ロン</button>`;
+    if (op.t === 'pon') return `<button data-act="claim" data-i="${i}">ポン</button>`;
+    if (op.t === 'kan') return `<button data-act="claim" data-i="${i}">カン</button>`;
+    return `<button data-act="claim" data-i="${i}">チー<span class="chiopt">${op.tiles.map((x) => tile(x, 'sm')).join('')}</span></button>`;
+  }).join('');
+  return `<div class="claimbox"><div class="q">${esc(nameOf(cl.from))}が${cl.kind === 'chankan' ? '加槓' : '捨てた'} ${tile(cl.tile, 'sm')}</div>
+    <div class="actions">${btns}<button class="ghost" data-act="pass">スキップ</button></div></div>`;
+}
+
+function sheetHTML() {
+  if (ui.menu) return menuHTML();
+  if (S.phase === 'result') return resultHTML();
+  if (S.phase === 'end') return endHTML();
+  return '';
+}
+
+function menuHTML() {
+  const me = mySeat();
+  let rows = '';
+  if (role !== 'local') {
+    rows = S.seats.map((s, i) => {
+      if (!s.uid || (role !== 'host' && i !== me)) return '';
+      const isMe = i === me;
+      const label = s.bot ? (isMe ? '自分で打つ' : '本人に戻す') : (isMe ? 'CPUに代打ちしてもらう' : 'CPUに代打ちさせる');
+      return `<div style="display:flex;align-items:center;gap:8px"><span style="flex:1">${esc(nameOf(i))}${s.bot ? '（CPU代打ち中）' : ''}</span><button class="small" data-act="togglebot" data-seat="${i}">${label}</button></div>`;
+    }).join('');
+    rows = `<h3>代打ち</h3><p class="muted">席を離れる人や接続が切れた人の番は、CPUに任せられます。${role === 'host' ? '' : 'ほかの人の席は親機の人が切り替えます。'}</p>${rows}`;
+  }
+  let quit;
+  if (role === 'host') quit = `<h3>対局をやめる</h3><p class="muted">全員の対局が終わり、ロビーに戻ります。</p><div class="btnrow"><button class="hot" data-act="tolobby">対局をやめる</button><button data-act="menu-close">閉じる</button></div>`;
+  else if (role === 'local') quit = `<div class="btnrow"><button class="hot" data-act="leave">練習をやめる</button><button data-act="menu-close">閉じる</button></div>`;
+  else quit = `<h3>部屋から出る</h3><p class="muted">同じ部屋番号でまた参加すれば、自分の席に戻れます。</p><div class="btnrow"><button class="hot" data-act="leave">部屋から出る</button><button data-act="menu-close">閉じる</button></div>`;
+  return `<div class="sheet-bg" data-act="menu-close"><div class="sheet" data-stop="1"><h2>メニュー</h2>${rows}${quit}</div></div>`;
+}
+
+function handBlock(hand, melds, owner, winTile) {
+  const h = hand.slice();
+  if (winTile !== undefined) h.splice(h.indexOf(winTile), 1);
+  h.sort((a, b) => a - b);
+  return `<div class="winhand">${h.map((x) => tile(x)).join('')}${winTile !== undefined ? '<span class="gap"></span>' + tile(winTile, 'hl') : ''}${melds.length ? '<span class="gap"></span>' : ''}${melds.map((m) => meldHTML(m, owner)).join('<span class="gap"></span>')}</div>`;
+}
+
+function resultHTML() {
+  const R = S.result;
+  const me = mySeat();
+  let body;
+  if (R.type === 'draw') {
+    body = `<h2>流局</h2>` + [0, 1, 2, 3].map((s) => `<div><h3>${esc(nameOf(s))} — ${R.tenpai[s] ? 'テンパイ' : 'ノーテン'}</h3>${R.hands[s] ? handBlock(R.hands[s], S.players[s].melds, s) : ''}</div>`).join('');
+  } else {
+    body = R.wins.map((w) => {
+      const sc = w.score;
+      const how = R.type === 'tsumo' ? 'ツモ' : `ロン ← ${esc(nameOf(w.from))}`;
+      const head = sc.yakuman ? sc.limit : `${sc.fu}符 ${sc.han}翻${sc.limit ? ' ' + sc.limit : ''}`;
+      return `<div style="display:flex;flex-direction:column;gap:10px">
+        <h2>${esc(nameOf(w.seat))} ${how}</h2>
+        ${handBlock(w.hand, w.melds, w.seat, w.tile)}
+        <div class="yaku">${sc.yaku.map((y) => `<span>${esc(y.name)}</span><span>${typeof y.han === 'number' ? y.han + '翻' : y.han}</span>`).join('')}</div>
+        <div class="big">${head}　${sc.total.toLocaleString()}点</div></div>`;
+    }).join('');
+    body += `<div class="dora" style="--tw:22px;gap:3px">ドラ表示 ${R.doraInd.map((x) => tile(x, 'sm')).join('')}${R.wins.some((w) => w.ura) ? '　裏 ' + R.uraInd.map((x) => tile(x, 'sm')).join('') : ''}</div>`;
+  }
+  const deltas = `<div class="deltas">${[0, 1, 2, 3].map((s) => {
+    const dv = R.delta[s];
+    return `<span class="wind">${WN[MJ.seatWind(S, s) - 27]}</span><span>${esc(nameOf(s))}</span><span class="${dv > 0 ? 'plus' : dv < 0 ? 'minus' : ''}">${dv > 0 ? '+' : ''}${dv ? dv.toLocaleString() : '±0'}</span><span>${S.scores[s].toLocaleString()}</span>`;
+  }).join('')}</div>`;
+  let btn;
+  if (role === 'local') btn = `<button class="gold" data-act="next">次の局へ</button>`;
+  else {
+    const humans = S.seats.map((s, i) => (s.uid && !s.bot ? i : -1)).filter((i) => i >= 0);
+    const ready = S.ready || {};
+    const waiting = humans.filter((i) => !ready[i]);
+    const iReady = me >= 0 && ready[me];
+    btn = me >= 0 && !iReady ? `<button class="gold" data-act="ready">OK（次の局へ）</button>` : '';
+    if (waiting.length && (iReady || me < 0)) {
+      btn += `<p class="muted">待っています：${waiting.map((i) => esc(nameOf(i))).join('、')}</p>`;
+      if (role === 'host') btn += `<button class="ghost" data-act="next">待たずに次の局へ</button>`;
+    }
+  }
+  return `<div class="sheet-bg"><div class="sheet"><div class="muted">${esc(R.label)}</div>${body}<h3>点数の移動</h3>${deltas}<div class="btnrow" style="flex-direction:column">${btn}</div></div></div>`;
+}
+
+function endHTML() {
+  const F = S.final;
+  const rows = F.order.map((s, r) => `<span class="big">${r + 1}位</span><span>${esc(nameOf(s))}</span><span>${S.scores[s].toLocaleString()}</span><span class="${F.pts[s] > 0 ? 'plus' : 'minus'}">${F.pts[s] > 0 ? '+' : ''}${F.pts[s].toFixed(1)}</span>`).join('');
+  const btns = role === 'host' ? `<button class="gold" data-act="again">同じ席でもう一局</button><button data-act="tolobby">ロビーへ</button>`
+    : role === 'local' ? `<button class="gold" data-act="practice">もう一局</button><button data-act="leave">終わる</button>`
+    : `<p class="muted">親機の人が次の対局を始めるのを待っています。</p>`;
+  return `<div class="sheet-bg"><div class="sheet"><h2>対局終了</h2>
+    <div class="deltas">${rows}</div>
+    <p class="muted">右端は30000点返し・ウマ10-20で計算したポイントです。</p>
+    <div class="btnrow">${btns}</div></div></div>`;
+}
+
+/* ---------- 操作 ---------- */
+
+app.addEventListener('input', (e) => {
+  if (e.target.id === 'name') { myName = e.target.value.trim().slice(0, 12); store.set('mj.name', myName); }
+  if (e.target.id === 'code') e.target.value = e.target.value.replace(/\D/g, '').slice(0, 4);
+});
+
+app.addEventListener('click', (e) => {
+  const tEl = e.target.closest('.hand .t');
+  if (tEl) return onTile(+tEl.dataset.id);
+  const el = e.target.closest('[data-act]');
+  if (!el) return;
+  if (el.dataset.act === 'menu-close' && el.classList.contains('sheet-bg') && e.target.closest('[data-stop]')) return;
+  onAct(el.dataset.act, el.dataset);
+});
+
+function onTile(id) {
+  const me = mySeat();
+  if (me < 0 || !S || S.phase !== 'turn' || S.turn !== me || S.seats[me].bot || S.players[me].riichi) return;
+  const o = MJ.turnOptions(S, me);
+  const allowed = ui.riichi ? o.discardable.filter((x) => o.riichi.includes(x >> 2)) : o.discardable;
+  if (!allowed.includes(id)) return;
+  if (ui.sel !== id) { ui.sel = id; render(); return; }
+  const riichi = ui.riichi;
+  ui.sel = null; ui.riichi = false;
+  send({ cmd: 'apply', a: { type: 'discard', id, riichi } });
+}
+
+function onAct(a, ds) {
+  switch (a) {
+    case 'create': return createRoom(null);
+    case 'resume': {
+      let saved = null;
+      try { saved = JSON.parse(store.get('mj.hostroom') || 'null'); } catch (e) { saved = null; }
+      if (!saved) return;
+      if (!myName) return toast('名前を入れてください');
+      return createRoom(saved);
+    }
+    case 'join': return joinRoom((document.getElementById('code') || {}).value || '');
+    case 'practice': ui.menu = false; return startPractice();
+    case 'leave': ui.menu = false; return leaveRoom();
+    case 'copy': {
+      const link = ds.link;
+      if (navigator.clipboard) navigator.clipboard.writeText(link).then(() => toast('コピーしました'), () => toast(link));
+      else toast(link);
+      return;
+    }
+    case 'menu': ui.menu = true; return render();
+    case 'menu-close': ui.menu = false; return render();
+    case 'riichi': ui.riichi = true; ui.sel = null; return render();
+    case 'riichi-cancel': ui.riichi = false; ui.sel = null; return render();
+    case 'tsumo': return send({ cmd: 'apply', a: { type: 'tsumo' } });
+    case 'kan': return send({ cmd: 'apply', a: { type: 'kan', kanType: ds.type, k: +ds.k } });
+    case 'claim': {
+      const op = S.claim.options[mySeat()][+ds.i];
+      return send({ cmd: 'apply', a: { type: 'respond', resp: op.t === 'ron' ? { t: 'ron' } : op } });
+    }
+    case 'pass': return send({ cmd: 'apply', a: { type: 'respond', resp: { t: 'pass' } } });
+    case 'ready': return send({ cmd: 'ready' });
+    case 'next': return send({ cmd: 'next' });
+    case 'togglebot': ui.menu = false; return send({ cmd: 'togglebot', seat: +ds.seat });
+    case 'botseat': return send({ cmd: 'botseat', seat: +ds.seat });
+    case 'clearseat': return send({ cmd: 'clearseat', seat: +ds.seat });
+    case 'rule': return send({ cmd: 'rule', k: ds.k, v: ds.k === 'aka' ? ds.v === '1' : ds.v });
+    case 'start': return send({ cmd: 'start' });
+    case 'again': return send({ cmd: 'again' });
+    case 'tolobby': ui.menu = false; return send({ cmd: 'tolobby' });
+  }
+}
+
+render();
+</script>
+</body>
+</html>
