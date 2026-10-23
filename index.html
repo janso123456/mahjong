@@ -27,6 +27,38 @@ input:focus-visible { outline: 2px solid var(--gold); outline-offset: 2px; }
 .dot.off { background: #ff9a85; }
 .net { font-size: 11px; color: var(--muted); display: flex; gap: 5px; align-items: center; }
 .or { color: var(--muted); font-size: 12px; text-align: center; letter-spacing: .1em; }
+.game { display: flex; flex-direction: column; gap: 8px; }
+
+/* 横持ち：左に正方形の卓、右に情報と操作、下の端から端まで手牌 */
+@media (orientation: landscape) and (min-width: 600px) {
+  #app.is-game { max-width: 1100px; }
+  .game {
+    --handTw: min(46px, calc((100vw - 60px) / 15.4), 9.5vh);
+    --handH: calc(var(--handTw) * 1.36 + 18px);
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr);
+    grid-template-rows: auto auto auto 1fr auto;
+    grid-template-areas: "table bar" "table opps" "table info" "table actions" "hand hand";
+    gap: 6px 12px;
+    align-items: start;
+  }
+  .game > .bar { grid-area: bar; }
+  .game > .opps { grid-area: opps; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; }
+  .game > .opps .opp { flex-wrap: wrap; align-items: flex-start; gap: 4px 8px; }
+  .game > .opps .melds { width: 100%; justify-content: flex-start; }
+  .game > .table {
+    grid-area: table; margin: 0;
+    --W: max(220px, min(calc(100vh - var(--handH) - 34px), 56vw));
+    --W: max(220px, min(calc(100dvh - var(--handH) - 34px), 56vw));
+  }
+  .game .mine { display: contents; }
+  .game .myinfo { grid-area: info; }
+  .game .mine > .actions { grid-area: actions; justify-content: flex-start; align-self: start; }
+  .game .mine > .actions .claimbox { align-items: flex-start; }
+  .game .hand { grid-area: hand; --tw: var(--handTw); min-height: 0; padding-top: 10px; }
+  .game > .spect { grid-area: actions; }
+  .sheet { max-width: 680px; }
+}
 </style>
 </head>
 <body>
@@ -375,9 +407,11 @@ function riverHTML(seat) {
 /* ---------- 画面 ---------- */
 
 function render() {
+  app.classList.remove('is-game');
   if (role === 'home') { app.innerHTML = homeHTML(); return; }
   if (!S) { app.innerHTML = `<div class="lobby"><h1>社内麻雀卓</h1><p class="lead">部屋 ${esc(code)} に接続しています…</p>${netNote()}<button class="ghost" data-act="leave">やめる</button></div>`; return; }
   if (S.phase === 'lobby') { app.innerHTML = lobbyHTML(); return; }
+  app.classList.add('is-game');
   app.innerHTML = gameHTML() + sheetHTML();
 }
 
@@ -474,11 +508,11 @@ function gameHTML() {
     <div class="cell"></div><div class="cell"><div class="river r-bottom">${riverHTML(rel(0))}</div></div><div class="cell"></div>
   </div>`;
   const status = role === 'local' ? '' : `<span class="net"><span class="dot ${net === 'ok' ? '' : 'off'}"></span>${net === 'ok' ? '部屋 ' + esc(code) : '再接続中'}</span>`;
-  return `<div class="bar"><span class="lbl">ドラ表示</span><div class="dora">${dora}</div><span class="grow"></span>${status}
+  return `<div class="game"><div class="bar"><span class="lbl">ドラ表示</span><div class="dora">${dora}</div><span class="grow"></span>${status}
       <button class="small ghost" data-act="menu">メニュー</button></div>
     <div class="opps">${opp(rel(2))}${opp(rel(3))}${opp(rel(1))}</div>
     ${table}
-    ${me >= 0 ? mineHTML(me) : `<p class="muted" style="text-align:center">観戦中です。手牌は見えません。</p>`}`;
+    ${me >= 0 ? mineHTML(me) : `<p class="muted spect" style="text-align:center">観戦中です。手牌は見えません。</p>`}</div>`;
 }
 
 function mineHTML(me) {

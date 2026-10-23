@@ -88,7 +88,7 @@ button.small { min-height: 34px; padding: 6px 10px; font-size: 13px; }
 .opp .sub { font-size: 11px; color: var(--muted); }
 .melds { --tw: 17px; display: flex; gap: 5px; flex-wrap: wrap; justify-content: flex-end; align-items: flex-end; }
 .meld { display: flex; gap: 1px; align-items: flex-end; }
-.tag { font-size: 10px; font-weight: 700; padding: 2px 6px; border-radius: 99px; background: var(--hot); color: #fff; letter-spacing: .05em; }
+.tag { white-space: nowrap; font-size: 10px; font-weight: 700; padding: 2px 6px; border-radius: 99px; background: var(--hot); color: #fff; letter-spacing: .05em; }
 .tag.cpu { background: var(--muted); color: var(--felt-deep); }
 
 /* 卓 */
@@ -117,9 +117,9 @@ button.small { min-height: 34px; padding: 6px 10px; font-size: 13px; }
 }
 .center .mid { text-align: center; line-height: 1.25; }
 .center .mid { max-width: 58%; }
-.center .rd { font-family: var(--f-disp); font-size: 17px; }
-.center .rest { font-size: 10.5px; color: var(--muted); font-variant-numeric: tabular-nums; }
-.sc { position: absolute; font-size: 11px; font-variant-numeric: tabular-nums; display: flex; gap: 4px; align-items: center; white-space: nowrap; }
+.center .rd { font-family: var(--f-disp); font-size: clamp(12px, calc(var(--W) * .05), 17px); }
+.center .rest { font-size: clamp(8.5px, calc(var(--W) * .032), 10.5px); white-space: nowrap; color: var(--muted); font-variant-numeric: tabular-nums; }
+.sc { position: absolute; font-size: clamp(9px, calc(var(--W) * .034), 11px); font-variant-numeric: tabular-nums; display: flex; gap: 4px; align-items: center; white-space: nowrap; }
 .sc .w { font-family: var(--f-disp); }
 .sc.dealer .w { color: var(--hot); }
 .sc.turn { color: var(--gold); font-weight: 700; }
