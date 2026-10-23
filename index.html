@@ -27,37 +27,138 @@ input:focus-visible { outline: 2px solid var(--gold); outline-offset: 2px; }
 .dot.off { background: #ff9a85; }
 .net { font-size: 11px; color: var(--muted); display: flex; gap: 5px; align-items: center; }
 .or { color: var(--muted); font-size: 12px; text-align: center; letter-spacing: .1em; }
-.game { display: flex; flex-direction: column; gap: 8px; }
+/* 対局画面：画面全体が卓。奥行きを付けた卓面に河と点数箱、外周に相手の手牌と名札、下に自分の手牌 */
+.tbl {
+  --sl: env(safe-area-inset-left, 0px);
+  --sr: env(safe-area-inset-right, 0px);
+  --htw: min(56px, calc((100vw - var(--sl) - var(--sr) - 40px) / 15.6), 11.5vh);
+  --handH: calc(var(--htw) * 1.36 + 14px + env(safe-area-inset-bottom, 0px));
+  --planeH: calc(100vh - var(--handH));
+  --planeH: calc(100dvh - var(--handH));
+  --rtw: calc(var(--planeH) * .058);
+  --rth: calc(var(--rtw) * 1.36);
+  --rvW: calc(var(--rtw) * 6 + 5px);
+  --rvH: calc(var(--rth) * 3 + 10px);
+  --B: calc(var(--rvW) + 6px); /* 点数箱の幅＝河の幅にして、角で河どうしが重ならないように */
+  --otw: min(18px, calc(var(--planeH) * .052));
+  position: fixed; inset: 0; overflow: hidden;
+  background:
+    radial-gradient(ellipse 70% 60% at 50% 42%, #2f5a8c 0%, #23476f 45%, #17324f 100%);
+}
+.tbl::before { /* 卓の縁 */
+  content: ""; position: absolute; inset: 0; pointer-events: none;
+  box-shadow: inset 0 0 0 10px #3a2618, inset 0 0 0 12px #5a3b22, inset 0 0 60px rgba(0, 0, 0, .45);
+}
+.plane { position: absolute; left: 0; right: 0; top: 0; height: var(--planeH); perspective: 1100px; }
+.stage { position: absolute; inset: 0; transform: rotateX(17deg); transform-origin: 50% 70%; }
+.stage::before { /* 卓面の対角線 */
+  content: ""; position: absolute; left: 50%; top: 52%; width: calc(var(--B) + var(--rvH) * 2 + 40px); aspect-ratio: 1;
+  transform: translate(-50%, -50%); border: 1px solid rgba(255, 255, 255, .09); border-radius: 6px;
+  background: linear-gradient(45deg, transparent 49.8%, rgba(255,255,255,.07) 50%, transparent 50.2%), linear-gradient(-45deg, transparent 49.8%, rgba(255,255,255,.07) 50%, transparent 50.2%);
+}
+.pc { position: absolute; left: 50%; top: 52%; width: var(--B); height: var(--B); transform: translate(-50%, -50%); }
+.cbox {
+  position: absolute; inset: 0; border-radius: 12px; background: linear-gradient(#2a2f36, #1a1e23);
+  box-shadow: 0 0 0 2px #4b525c, 0 6px 14px rgba(0, 0, 0, .45); color: #e9eef5;
+}
+.cmid { position: absolute; inset: 26%; display: grid; place-content: center; text-align: center; border-radius: 6px; background: #12161a; box-shadow: inset 0 0 0 1px #3a414b; }
+.crd { font-family: var(--f-disp); font-size: calc(var(--B) * .13); color: #8fd3ff; white-space: nowrap; }
+.crest { font-size: calc(var(--B) * .1); color: #8fd3ff; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.cs { position: absolute; left: 50%; top: 50%; width: var(--B); display: flex; justify-content: center; align-items: center; gap: 4px;
+  font-size: calc(var(--B) * .105); font-variant-numeric: tabular-nums; color: #f0c75e; }
+.cs b { position: absolute; left: 4px; font-family: var(--f-disp); font-weight: 400; color: #cfd6df; font-size: calc(var(--B) * .12); }
+.cs b.dealer { color: var(--hot); }
+.cs .stick { position: absolute; top: -2px; }
+.cs.turn::after { content: ""; position: absolute; bottom: -3px; left: 30%; right: 30%; height: 3px; border-radius: 2px; background: var(--gold); box-shadow: 0 0 8px var(--gold); }
+.cs0 { transform: translate(-50%, calc(var(--B) * .5 - 100%)) ; padding-bottom: 4px; }
+.cs2 { transform: translate(-50%, -50%) rotate(180deg) translateY(calc(var(--B) * .5 - 50% - 4px)); }
+.cs1 { transform: translate(-50%, -50%) rotate(-90deg) translateY(calc(var(--B) * .5 - 50% - 4px)); }
+.cs3 { transform: translate(-50%, -50%) rotate(90deg) translateY(calc(var(--B) * .5 - 50% - 4px)); }
+.cs0 { transform: translate(-50%, -50%) translateY(calc(var(--B) * .5 - 50% - 4px)); padding-bottom: 0; }
+.stick { display: inline-block; width: 22px; height: 4px; border-radius: 2px; background: var(--ivory); position: relative; vertical-align: middle; }
+.stick::after { content: ""; position: absolute; left: 50%; top: 50%; width: 4px; height: 4px; border-radius: 50%; background: var(--hot); transform: translate(-50%, -50%); }
 
-/* 横持ち：左に正方形の卓、右に情報と操作、下の端から端まで手牌 */
-@media (orientation: landscape) and (min-width: 600px) {
-  #app.is-game { max-width: 1100px; }
-  .game {
-    --handTw: min(46px, calc((100vw - 60px) / 15.4), 9.5vh);
-    --handH: calc(var(--handTw) * 1.36 + 18px);
-    display: grid;
-    grid-template-columns: auto minmax(0, 1fr);
-    grid-template-rows: auto auto auto 1fr auto;
-    grid-template-areas: "table bar" "table opps" "table info" "table actions" "hand hand";
-    gap: 6px 12px;
-    align-items: start;
-  }
-  .game > .bar { grid-area: bar; }
-  .game > .opps { grid-area: opps; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; }
-  .game > .opps .opp { flex-wrap: wrap; align-items: flex-start; gap: 4px 8px; }
-  .game > .opps .melds { width: 100%; justify-content: flex-start; }
-  .game > .table {
-    grid-area: table; margin: 0;
-    --W: max(220px, min(calc(100vh - var(--handH) - 34px), 56vw));
-    --W: max(220px, min(calc(100dvh - var(--handH) - 34px), 56vw));
-  }
-  .game .mine { display: contents; }
-  .game .myinfo { grid-area: info; }
-  .game .mine > .actions { grid-area: actions; justify-content: flex-start; align-self: start; }
-  .game .mine > .actions .claimbox { align-items: flex-start; }
-  .game .hand { grid-area: hand; --tw: var(--handTw); min-height: 0; padding-top: 10px; }
-  .game > .spect { grid-area: actions; }
-  .sheet { max-width: 680px; }
+.rv { --tw: var(--rtw); position: absolute; width: var(--rvW); height: var(--rvH); display: flex; flex-direction: column; gap: 2px; padding-top: 6px; }
+.rv .row { display: flex; gap: 1px; align-items: flex-end; white-space: nowrap; }
+.rv0 { left: 50%; top: 100%; transform: translateX(-50%); }
+.rv2 { left: 50%; bottom: 100%; transform: translateX(-50%) rotate(180deg); }
+.rv1 { left: calc(100% + var(--rvH) / 2); top: 50%; transform: translate(-50%, -50%) rotate(-90deg); }
+.rv3 { left: calc(var(--rvH) / -2); top: 50%; transform: translate(-50%, -50%) rotate(90deg); }
+
+/* 相手の手牌（裏） */
+.bk { display: inline-block; width: var(--otw); height: calc(var(--otw) * 1.36); border-radius: 3px; background: linear-gradient(#f1c45a, var(--back)); box-shadow: inset 0 -3px 0 #f5f0e2, 0 1px 2px rgba(0,0,0,.4); }
+.oh { position: absolute; display: flex; gap: 6px; align-items: center; }
+.oh .bks { display: flex; gap: 1px; }
+.oh .omelds { --tw: calc(var(--otw) * 1.05); display: flex; gap: 4px; }
+.oh-top { top: 12px; left: 50%; transform: translateX(-50%); flex-direction: row-reverse; }
+.oh-left, .oh-right { --otw: min(16px, calc(var(--planeH) * .046)); }
+.oh-left { left: calc(var(--sl) + 80px); top: calc(var(--planeH) * .52); transform: translate(-50%, -50%) rotate(90deg); }
+.oh-right { right: calc(var(--sr) + 80px); top: calc(var(--planeH) * .52); transform: translate(50%, -50%) rotate(-90deg); }
+
+/* 名札 */
+.plate { position: absolute; display: flex; align-items: center; gap: 6px; padding: 4px 10px 4px 4px; border-radius: 999px;
+  background: rgba(10, 18, 28, .72); box-shadow: inset 0 0 0 1px rgba(255,255,255,.12); max-width: 210px; z-index: 3; }
+.plate.turn { box-shadow: inset 0 0 0 2px var(--gold), 0 0 12px rgba(242, 193, 78, .45); }
+.av { width: 34px; height: 34px; border-radius: 50%; flex: none; display: grid; place-items: center; font-weight: 700; font-size: 16px; color: #fff;
+  background: linear-gradient(135deg, hsl(var(--hue) 55% 55%), hsl(calc(var(--hue) + 40) 55% 38%)); box-shadow: 0 0 0 2px rgba(255,255,255,.8); }
+.pinfo { display: flex; flex-direction: column; min-width: 0; line-height: 1.2; }
+.pn { font-weight: 700; font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ps { font-size: 12px; font-variant-numeric: tabular-nums; color: #f0c75e; display: flex; gap: 5px; }
+.ps b { font-family: var(--f-disp); font-weight: 400; color: #cfd6df; }
+.ps b.dealer { color: var(--hot); }
+.ptags { display: flex; gap: 3px; margin-top: 2px; }
+.pl-top { top: 8px; right: calc(50% + var(--otw) * 7.6 + 16px); }
+.pl-left { left: calc(var(--sl) + 104px); top: calc(var(--planeH) * .3); }
+.pl-right { right: calc(var(--sr) + 104px); top: calc(var(--planeH) * .3); flex-direction: row-reverse; padding: 4px 4px 4px 10px; }
+.pl-right .pinfo { align-items: flex-end; }
+.pl-me { left: calc(var(--sl) + 56px); bottom: calc(var(--handH) + 22px); }
+
+/* 左上の情報・右上のボタン */
+.info { position: absolute; top: 8px; left: calc(var(--sl) + 12px); z-index: 3; padding: 6px 8px; border-radius: 10px;
+  background: rgba(10, 18, 28, .78); box-shadow: inset 0 0 0 1px rgba(242, 193, 78, .45); display: flex; flex-direction: column; gap: 4px; }
+.info .dora { --tw: min(20px, calc(var(--planeH) * .06)); display: flex; gap: 2px; }
+.info .cnt { display: flex; gap: 10px; font-size: 11px; color: #e9eef5; font-variant-numeric: tabular-nums; align-items: center; }
+.info .cnt .stick { width: 16px; margin-right: 3px; }
+.tops { position: absolute; top: 8px; right: calc(var(--sr) + 12px); display: flex; gap: 6px; z-index: 3; }
+.tops button { background: rgba(10, 18, 28, .6); }
+
+/* 左端の自動操作スイッチ */
+.toggles { position: absolute; left: calc(var(--sl) + 12px); bottom: calc(var(--handH) + 50px); display: flex; flex-direction: column; gap: 4px; z-index: 3;
+  padding: 4px; border-radius: 10px; background: rgba(10, 18, 28, .6); }
+.tg { min-height: 0; width: 34px; height: 34px; padding: 0; border-radius: 8px; background: transparent; color: #9fb3c8; box-shadow: none; display: grid; place-items: center; }
+.tg b { font-family: var(--f-disp); font-weight: 400; font-size: 17px; }
+.tg span { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
+.tg.on { background: var(--gold); color: var(--ink); }
+
+/* 自分の手牌と操作 */
+.handrow { position: absolute; left: 0; right: 0; bottom: 0; height: var(--handH); display: flex; justify-content: center; align-items: flex-start;
+  gap: 14px; padding-left: var(--sl); padding-right: var(--sr); z-index: 4; }
+.handrow .hand { --tw: var(--htw); padding-top: 0; min-height: 0; gap: 1px; }
+.handrow .hand .t.sel { transform: translateY(-14px); }
+.mymelds { --tw: calc(var(--htw) * .7); display: flex; gap: 6px; align-self: flex-end; padding-bottom: calc(14px + env(safe-area-inset-bottom, 0px)); }
+.acts { position: absolute; right: calc(var(--sr) + 16px); bottom: calc(var(--handH) + 10px); display: flex; gap: 8px; align-items: center; z-index: 5; flex-wrap: wrap; justify-content: flex-end; max-width: 60vw; }
+.acts button { min-width: 76px; min-height: 46px; border-radius: 999px; font-size: 16px; box-shadow: 0 3px 0 rgba(0,0,0,.35); }
+.acts button.ghost { background: rgba(10, 18, 28, .75); }
+.acts .mini { --tw: 14px; display: inline-flex; vertical-align: middle; }
+.acts .chiopt { --tw: 15px; }
+.claimq { --tw: calc(var(--htw) * .8); display: inline-flex; margin-right: 4px; }
+.hint { position: absolute; left: 50%; transform: translateX(-50%); bottom: calc(var(--handH) + 12px); font-size: 12px; color: #d5dee8;
+  background: rgba(10, 18, 28, .6); padding: 4px 10px; border-radius: 999px; z-index: 3; white-space: nowrap; display: flex; gap: 6px; align-items: center; }
+.spect { position: absolute; bottom: 12px; left: 50%; transform: translateX(-50%); color: #d5dee8; font-size: 13px; }
+
+/* シートは横向きでは中央に */
+@media (orientation: landscape) {
+  .sheet-bg { align-items: center; }
+  .sheet { max-width: 720px; max-height: 92vh; border-radius: 18px; }
+}
+
+/* 縦持ちのときは横向きを促す */
+.rotate { display: none; }
+@media (orientation: portrait) {
+  .rotate { display: grid; place-items: center; position: fixed; inset: 0; z-index: 50; background: var(--felt-deep); text-align: center; padding: 24px; }
+  .rotate div { display: flex; flex-direction: column; gap: 8px; }
+  .rotate b { font-family: var(--f-disp); font-weight: 400; font-size: 22px; text-wrap: balance; }
+  .rotate span { color: var(--muted); }
 }
 </style>
 </head>
@@ -91,8 +192,11 @@ let peer = null, hostConn = null;
 const conns = new Map(); // 親機: pid -> 接続
 let net = 'ok';          // ok | connecting | lost
 let leaving = false;
-let ui = { sel: null, riichi: false, menu: false };
-let botTimer = null, retryTimer = null, wakeLock = null;
+let ui = { sel: null, riichi: false, menu: false, yaku: false };
+let botTimer = null, retryTimer = null, wakeLock = null, autoTimer = null;
+// 左端のスイッチ：和＝自動で和了、鳴＝鳴きをすべてスキップ、切＝ツモ切り
+let auto = { win: false, nocall: false, giri: false };
+try { auto = Object.assign(auto, JSON.parse(store.get('mj.auto') || '{}')); } catch (e) { /* 初期値のまま */ }
 
 const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 function toast(msg) {
@@ -352,6 +456,41 @@ function setView(v) {
   if (S && S.seq !== lastSeq) { lastSeq = S.seq; ui.sel = null; ui.riichi = false; }
   if (S && S.phase !== 'lobby') keepAwake();
   render();
+  scheduleAuto();
+}
+
+function scheduleAuto() {
+  clearTimeout(autoTimer);
+  const me = mySeat();
+  if (!S || me < 0 || S.seats[me].bot) return;
+  let msg = null;
+  if (S.phase === 'claim' && S.claim.options[me] && !S.claim.responses[me]) {
+    const opts = S.claim.options[me];
+    if (auto.win && opts.some((o) => o.t === 'ron')) msg = { t: 'ron' };
+    else if (auto.nocall && !opts.some((o) => o.t === 'ron')) msg = { t: 'pass' };
+    if (msg) msg = { cmd: 'apply', a: { type: 'respond', resp: msg } };
+  } else if (S.phase === 'turn' && S.turn === me && !S.players[me].riichi) {
+    const o = MJ.turnOptions(S, me);
+    if (auto.win && o.tsumo) msg = { cmd: 'apply', a: { type: 'tsumo' } };
+    else if (auto.giri && S.drawn !== null && !o.tsumo) msg = { cmd: 'apply', a: { type: 'discard', id: S.drawn } };
+  }
+  if (!msg) return;
+  const seq = S.seq;
+  autoTimer = setTimeout(() => { if (S && S.seq === seq) send(msg); }, 600);
+}
+
+const YAKU = [
+  ['1翻', '立直・一発・門前清自摸和・断幺九・平和・一盃口・役牌（白發中・自風・場風）・海底摸月・河底撈魚・嶺上開花・槍槓'],
+  ['2翻', 'ダブル立直・七対子・対々和・三暗刻・三色同刻・三槓子・小三元・混老頭・三色同順※・一気通貫※・混全帯幺九※'],
+  ['3翻', '二盃口・混一色※・純全帯幺九※'],
+  ['6翻', '清一色※'],
+  ['役満', '国士無双・四暗刻・大三元・小四喜・大四喜・字一色・清老頭・緑一色・九蓮宝燈・四槓子・天和・地和'],
+];
+function yakuHTML() {
+  return `<div class="sheet-bg" data-act="yaku-close"><div class="sheet" data-stop="1"><h2>役一覧</h2>
+    <div class="yaku">${YAKU.map(([h, list]) => `<span>${list}</span><span>${h}</span>`).join('')}</div>
+    <p class="muted">※は鳴くと1翻下がります。ドラ・赤ドラ・裏ドラは役ではないので、ほかに役がないと和了できません。</p>
+    <div class="btnrow"><button data-act="yaku-close">閉じる</button></div></div></div>`;
 }
 
 function mySeat() { return S ? S.seats.findIndex((s) => s.uid === myPid) : -1; }
@@ -483,36 +622,51 @@ function gameHTML() {
   const rel = (i) => (v + i) % 4;
   const doraInd = MJ.doraIndicators(S);
   const turnSeat = S.phase === 'turn' ? S.turn : -1;
-  const dora = [0, 1, 2, 3, 4].map((i) => tile(i < doraInd.length ? doraInd[i] : null, 'sm')).join('');
+  const wind = (s) => WN[MJ.seatWind(S, s) - 27];
 
-  const opp = (s) => {
-    const p = S.players[s];
-    const st = S.seats[s];
+  // 名札：頭文字のアイコン・名前・風・点数
+  const plate = (s, pos) => {
+    const st = S.seats[s], p = S.players[s];
+    const nm = nameOf(s);
     const off = st.uid && st.uid !== myPid && role !== 'local' && !st.online;
-    return `<div class="opp ${turnSeat === s ? 'turn' : ''}">
-      <span class="wind ${s === d ? 'dealer' : ''}">${WN[MJ.seatWind(S, s) - 27]}</span>
-      <div class="who"><span class="nm">${esc(nameOf(s))}</span>
-      <span class="sub">${S.scores[s].toLocaleString()}点 · 手牌${p.hand.length}枚 ${p.riichi ? '<span class="tag">リーチ</span>' : ''} ${st.bot && st.uid ? '<span class="tag cpu">CPU代打ち</span>' : ''} ${off ? '<span class="tag cpu">切断中</span>' : ''}</span></div>
-      <div class="melds">${p.melds.map((m) => meldHTML(m, s)).join('')}</div></div>`;
+    const tags = (p.riichi ? '<span class="tag">リーチ</span>' : '') +
+      (st.bot && st.uid ? '<span class="tag cpu">代打ち</span>' : '') + (off ? '<span class="tag cpu">切断中</span>' : '');
+    return `<div class="plate pl-${pos} ${turnSeat === s ? 'turn' : ''}">
+      <span class="av" style="--hue:${(s * 83 + 200) % 360}">${esc(nm.slice(0, 1))}</span>
+      <div class="pinfo"><span class="pn">${esc(nm)}</span>
+      <span class="ps"><b class="${s === d ? 'dealer' : ''}">${wind(s)}</b>${S.scores[s].toLocaleString()}</span>${tags ? `<span class="ptags">${tags}</span>` : ''}</div></div>`;
   };
-  const sc = (i) => {
+  // 相手の手牌（裏向き）と鳴いた牌
+  const opp = (s, pos) => {
+    const p = S.players[s];
+    const backs = '<span class="bk"></span>'.repeat(p.hand.length);
+    return `<div class="oh oh-${pos}"><div class="bks">${backs}</div><div class="omelds">${p.melds.map((m) => meldHTML(m, s)).join('')}</div></div>`;
+  };
+  const side = (i) => {
     const s = rel(i);
-    return `<div class="sc s${i} ${s === d ? 'dealer' : ''} ${turnSeat === s ? 'turn' : ''}"><span class="w">${WN[MJ.seatWind(S, s) - 27]}</span><span>${S.scores[s]}</span>${S.players[s].riichi ? '<span class="stick"></span>' : ''}</div>`;
+    return `<div class="cs cs${i} ${turnSeat === s ? 'turn' : ''}"><b class="${s === d ? 'dealer' : ''}">${wind(s)}</b><span>${S.scores[s]}</span>${S.players[s].riichi ? '<i class="stick"></i>' : ''}</div>`;
   };
-  const table = `<div class="table">
-    <div class="cell"></div><div class="cell"><div class="river r-top">${riverHTML(rel(2))}</div></div><div class="cell"></div>
-    <div class="cell"><div class="river r-left">${riverHTML(rel(3))}</div></div>
-    <div class="center">${sc(0)}${sc(1)}${sc(2)}${sc(3)}
-      <div class="mid"><div class="rd">${MJ.roundLabel(S)}</div><div class="rest">${S.honba}本場 · 供託${S.kyotaku}</div><div class="rest">残り ${S.wall.length}</div></div></div>
-    <div class="cell"><div class="river r-right">${riverHTML(rel(1))}</div></div>
-    <div class="cell"></div><div class="cell"><div class="river r-bottom">${riverHTML(rel(0))}</div></div><div class="cell"></div>
-  </div>`;
-  const status = role === 'local' ? '' : `<span class="net"><span class="dot ${net === 'ok' ? '' : 'off'}"></span>${net === 'ok' ? '部屋 ' + esc(code) : '再接続中'}</span>`;
-  return `<div class="game"><div class="bar"><span class="lbl">ドラ表示</span><div class="dora">${dora}</div><span class="grow"></span>${status}
-      <button class="small ghost" data-act="menu">メニュー</button></div>
-    <div class="opps">${opp(rel(2))}${opp(rel(3))}${opp(rel(1))}</div>
-    ${table}
-    ${me >= 0 ? mineHTML(me) : `<p class="muted spect" style="text-align:center">観戦中です。手牌は見えません。</p>`}</div>`;
+  const dora = [0, 1, 2, 3, 4].map((i) => tile(i < doraInd.length ? doraInd[i] : null, 'sm')).join('');
+  const netDot = role === 'local' ? '' : `<span class="net"><span class="dot ${net === 'ok' ? '' : 'off'}"></span>${net === 'ok' ? '部屋 ' + esc(code) : '再接続中'}</span>`;
+  const toggles = [['win', '和', '自動和了'], ['nocall', '鳴', '鳴きなし'], ['giri', '切', 'ツモ切り']].map(([k, ch, label]) =>
+    `<button class="tg ${auto[k] ? 'on' : ''}" data-act="auto" data-k="${k}" aria-pressed="${auto[k]}" title="${label}"><b>${ch}</b><span>${label}</span></button>`).join('');
+
+  return `<div class="tbl">
+    <div class="plane"><div class="stage"><div class="pc">
+      <div class="cbox">${side(0)}${side(1)}${side(2)}${side(3)}
+        <div class="cmid"><div class="crd">${MJ.roundLabel(S)}</div><div class="crest">残 ${S.wall.length}</div></div></div>
+      <div class="rv rv0">${riverHTML(rel(0))}</div><div class="rv rv1">${riverHTML(rel(1))}</div>
+      <div class="rv rv2">${riverHTML(rel(2))}</div><div class="rv rv3">${riverHTML(rel(3))}</div>
+    </div></div></div>
+    ${opp(rel(2), 'top')}${opp(rel(3), 'left')}${opp(rel(1), 'right')}
+    ${plate(rel(2), 'top')}${plate(rel(3), 'left')}${plate(rel(1), 'right')}
+    <div class="info"><div class="dora">${dora}</div>
+      <div class="cnt"><span>${S.honba}本場</span><span><i class="stick"></i>×${S.kyotaku}</span></div>${netDot}</div>
+    <div class="tops"><button class="small ghost" data-act="yaku">役一覧</button><button class="small ghost" data-act="menu">メニュー</button></div>
+    ${me >= 0 ? `<div class="toggles">${toggles}</div>` : ''}
+    ${me >= 0 ? plate(me, 'me') + mineHTML(me) : `<p class="spect">観戦中です。手牌は見えません。</p>`}
+  </div>
+  <div class="rotate"><div><b>iPhoneを横向きにしてください</b><span>対局画面は横向き用です。</span></div></div>`;
 }
 
 function mineHTML(me) {
@@ -520,7 +674,6 @@ function mineHTML(me) {
   const st = S.seats[me];
   const myTurn = S.phase === 'turn' && S.turn === me && !st.bot;
   const o = myTurn ? MJ.turnOptions(S, me) : null;
-  const d = MJ.dealerOf(S);
   let hand = p.hand.slice();
   let drawn = null;
   if (S.phase === 'turn' && S.turn === me && S.drawn !== null) { drawn = S.drawn; hand = hand.filter((x) => x !== drawn); }
@@ -534,32 +687,26 @@ function mineHTML(me) {
   };
   const tiles = hand.map((id) => tile(id, tcls(id))).join('') + (drawn !== null ? tile(drawn, 'drawn ' + tcls(drawn)) : '');
 
-  let actions = '';
+  let btns = '', hint = '';
   if (st.bot) {
-    actions = `<span class="hint">CPUが代わりに打っています</span><button class="gold" data-act="togglebot" data-seat="${me}">自分で打つ</button>`;
+    hint = 'CPUが代わりに打っています';
+    btns = `<button class="gold" data-act="togglebot" data-seat="${me}">自分で打つ</button>`;
   } else if (S.phase === 'claim' && S.claim.options[me] && !S.claim.responses[me]) {
-    actions = claimHTML(me);
+    btns = claimHTML(me);
   } else if (myTurn) {
-    const btns = [];
-    if (o.tsumo) btns.push(`<button class="hot" data-act="tsumo">ツモ</button>`);
-    if (o.riichi.length && !ui.riichi && !p.riichi) btns.push(`<button class="gold" data-act="riichi">リーチ</button>`);
-    if (ui.riichi) btns.push(`<span class="hint">リーチで切る牌を選んでください</span><button class="ghost" data-act="riichi-cancel">やめる</button>`);
-    for (const k of o.kans) btns.push(`<button data-act="kan" data-type="${k.type}" data-k="${k.k}">カン <span style="--tw:16px;display:inline-flex">${tile(k.k * 4 + 1, 'sm')}</span></button>`);
-    if (!ui.riichi) btns.push(`<span class="hint">${p.riichi ? 'ツモ切りします…' : ui.sel !== null ? 'もう一度タップで切ります' : '切る牌をタップ'}</span>`);
-    actions = btns.join('');
+    if (o.tsumo) btns += `<button class="hot" data-act="tsumo">ツモ</button>`;
+    if (o.riichi.length && !ui.riichi && !p.riichi) btns += `<button class="gold" data-act="riichi">リーチ</button>`;
+    if (ui.riichi) btns += `<button class="ghost" data-act="riichi-cancel">リーチをやめる</button>`;
+    for (const k of o.kans) btns += `<button data-act="kan" data-type="${k.type}" data-k="${k.k}">カン <span class="mini">${tile(k.k * 4 + 1, 'sm')}</span></button>`;
+    hint = ui.riichi ? 'リーチで切る牌を選んでください' : p.riichi ? 'ツモ切りします…' : ui.sel !== null ? 'もう一度タップで切ります' : '切る牌をタップ';
   } else if (S.phase === 'claim') {
-    actions = `<span class="hint">ほかの人の選択を待っています</span>`;
-  } else {
-    actions = `<span class="hint">${esc(nameOf(S.turn))}の番です</span>`;
+    hint = 'ほかの人の選択を待っています';
   }
-
-  return `<div class="mine">
-    <div class="myinfo"><span class="wind ${me === d ? 'dealer' : ''}">${WN[MJ.seatWind(S, me) - 27]}</span>
-      <span class="nm">${S.scores[me].toLocaleString()}点</span>${p.riichi ? '<span class="tag">リーチ</span>' : ''}
-      ${p.riichi && MJ.isFuriten(p) ? '<span class="tag cpu">フリテン</span>' : ''}
-      <span class="grow"></span><div class="melds" style="--tw:20px">${p.melds.map((m) => meldHTML(m, me)).join('')}</div></div>
-    <div class="hand ${myTurn ? '' : 'wait'}">${tiles}</div>
-    <div class="actions">${actions}</div></div>`;
+  const furiten = p.riichi && MJ.isFuriten(p) ? '<span class="tag cpu">フリテン</span>' : '';
+  return `${hint || furiten ? `<div class="hint">${furiten}${esc(hint)}</div>` : ''}
+    <div class="acts">${btns}</div>
+    <div class="handrow"><div class="hand ${myTurn ? '' : 'wait'}">${tiles}</div>
+      <div class="mymelds">${p.melds.map((m) => meldHTML(m, me)).join('')}</div></div>`;
 }
 
 function claimHTML(me) {
@@ -570,12 +717,12 @@ function claimHTML(me) {
     if (op.t === 'kan') return `<button data-act="claim" data-i="${i}">カン</button>`;
     return `<button data-act="claim" data-i="${i}">チー<span class="chiopt">${op.tiles.map((x) => tile(x, 'sm')).join('')}</span></button>`;
   }).join('');
-  return `<div class="claimbox"><div class="q">${esc(nameOf(cl.from))}が${cl.kind === 'chankan' ? '加槓' : '捨てた'} ${tile(cl.tile, 'sm')}</div>
-    <div class="actions">${btns}<button class="ghost" data-act="pass">スキップ</button></div></div>`;
+  return `<span class="claimq" title="${esc(nameOf(cl.from))}が${cl.kind === 'chankan' ? '加槓' : '捨てた'}牌">${tile(cl.tile)}</span>${btns}<button class="ghost" data-act="pass">スキップ</button>`;
 }
 
 function sheetHTML() {
   if (ui.menu) return menuHTML();
+  if (ui.yaku) return yakuHTML();
   if (S.phase === 'result') return resultHTML();
   if (S.phase === 'end') return endHTML();
   return '';
@@ -670,7 +817,7 @@ app.addEventListener('click', (e) => {
   if (tEl) return onTile(+tEl.dataset.id);
   const el = e.target.closest('[data-act]');
   if (!el) return;
-  if (el.dataset.act === 'menu-close' && el.classList.contains('sheet-bg') && e.target.closest('[data-stop]')) return;
+  if (el.classList.contains('sheet-bg') && e.target.closest('[data-stop]')) return;
   onAct(el.dataset.act, el.dataset);
 });
 
@@ -707,6 +854,13 @@ function onAct(a, ds) {
     }
     case 'menu': ui.menu = true; return render();
     case 'menu-close': ui.menu = false; return render();
+    case 'yaku': ui.yaku = true; return render();
+    case 'yaku-close': ui.yaku = false; return render();
+    case 'auto':
+      auto[ds.k] = !auto[ds.k];
+      store.set('mj.auto', JSON.stringify(auto));
+      render(); scheduleAuto();
+      return;
     case 'riichi': ui.riichi = true; ui.sel = null; return render();
     case 'riichi-cancel': ui.riichi = false; ui.sel = null; return render();
     case 'tsumo': return send({ cmd: 'apply', a: { type: 'tsumo' } });
