@@ -93,7 +93,7 @@ input:focus-visible { outline: 2px solid var(--gold); outline-offset: 2px; }
 .rv3 { left: calc(var(--rvH) / -2); top: 50%; transform: translate(-50%, -50%) rotate(90deg); }
 
 /* 相手の手牌（裏） */
-.bk { display: inline-block; width: var(--otw); height: calc(var(--otw) * 1.36); border-radius: 3px; background: linear-gradient(#f1c45a, var(--back)); box-shadow: inset 0 -3px 0 #f5f0e2, 0 1px 2px rgba(0,0,0,.4); }
+.bk { display: inline-block; width: var(--otw); height: calc(var(--otw) * 1.36); border-radius: 3px; background: linear-gradient(#3a7bd0, var(--back)); box-shadow: inset 0 -3px 0 #fbfaf6, 0 1px 2px rgba(0,0,0,.4); }
 .oh { position: absolute; display: flex; gap: 6px; align-items: center; }
 .oh .bks { display: flex; gap: 1px; }
 .oh .omelds { --tw: calc(var(--otw) * 1.05); display: flex; gap: 4px; }
@@ -182,6 +182,7 @@ input:focus-visible { outline: 2px solid var(--gold); outline-offset: 2px; }
 
 <script src="https://cdn.jsdelivr.net/npm/peerjs@1.5.4/dist/peerjs.min.js"></script>
 <script src="engine.js"></script>
+<script src="tiles.js"></script>
 <script>
 'use strict';
 const PREFIX = 'shanai-mj-7k2q-';      // PeerJSの公開サーバーで他と重ならないための接頭辞
@@ -552,23 +553,14 @@ function nameOf(seat) {
 
 /* ---------- 牌の描画 ---------- */
 
-const MAN = '一二三四五六七八九', PIN = '①②③④⑤⑥⑦⑧⑨';
+// 牌の絵柄は tiles.js が描いた背景画像（クラス f<種類>、赤5は f<種類>r）
+const TILE_NAMES = [...'一二三四五六七八九'].map((c) => c + '萬').concat([...'一二三四五六七八九'].map((c) => c + '筒'), [...'一二三四五六七八九'].map((c) => c + '索'), [...'東南西北白發中']);
 function tile(id, cls) {
   cls = cls || '';
   if (id === null || id === undefined) return `<span class="t back ${cls}"></span>`;
   const k = id >> 2;
   const red = S && S.rules.aka && MJ.RED_IDS.includes(id);
-  let suit, g, lab = '', extra = '';
-  if (k < 9) { suit = 'm'; g = MAN[k]; lab = '萬'; }
-  else if (k < 18) { suit = 'p'; g = PIN[k - 9]; lab = '筒'; }
-  else if (k < 27) { suit = 's'; g = String(k - 17); lab = '索'; }
-  else {
-    suit = 'z'; g = '東南西北 發中'[k - 27];
-    if (k === 31) { g = ''; extra = 'haku'; }
-    if (k === 32) extra = 'hatsu';
-    if (k === 33) extra = 'chun';
-  }
-  return `<span class="t ${suit} ${extra} ${red ? 'red' : ''} ${cls}" data-id="${id}"><b>${g}</b><i>${lab}</i></span>`;
+  return `<span class="t f${k}${red ? 'r' : ''} ${cls}" data-id="${id}" role="img" aria-label="${red ? '赤' : ''}${TILE_NAMES[k]}"></span>`;
 }
 
 function meldHTML(m, owner) {
