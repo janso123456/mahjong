@@ -133,6 +133,30 @@ input:focus-visible { outline: 2px solid var(--gold); outline-offset: 2px; }
   .mh-body { padding: 10px 12px; max-height: calc(100vh - 90px); }
 }
 
+/* 対局中は画面を動かさない（縦持ちで回転表示したときにはみ出してもスクロールさせない） */
+body.in-game { overflow: hidden; }
+html:has(body.in-game) { overflow: hidden; }
+
+/* キャラ */
+.av.img { background-color: #1a120a; background-repeat: no-repeat; background-size: 150% auto; background-position: center 8%; }
+.av.lg { width: 44px; height: 44px; }
+.mh-chara { position: absolute; left: max(10px, env(safe-area-inset-left, 0px)); bottom: 0; width: min(40vw, 520px); height: 82vh;
+  background-repeat: no-repeat; background-position: left bottom; background-size: contain; pointer-events: none;
+  filter: drop-shadow(0 0 18px rgba(255, 170, 60, .35)) drop-shadow(0 6px 10px rgba(0, 0, 0, .6)); animation: mhCharaIn .7s cubic-bezier(.2, .8, .2, 1) both; }
+.mh-who { z-index: 2; }
+.mh-chars { display: flex; gap: 8px; overflow-x: auto; padding: 4px 2px 8px; scrollbar-width: thin; }
+.mh-char { flex: none; width: 66px; height: 86px; padding: 0; min-height: 0; border-radius: 6px; background: rgba(0, 0, 0, .45);
+  border: 1px solid #6b5426; box-shadow: none; display: grid; place-items: center; color: var(--mh-dim); font-weight: 500; font-size: 12px; }
+.mh-char .ch { width: 100%; height: 100%; background-repeat: no-repeat; background-position: center bottom; background-size: contain; }
+.mh-char.on { border: 2px solid #ffd36b; box-shadow: 0 0 10px rgba(255, 211, 107, .6); background: rgba(232, 178, 74, .18); }
+.sheet .mh-chars { --mh-dim: #b9a072; }
+.mh-packbtns { display: flex; gap: 8px; flex-wrap: wrap; }
+.mh-btn.small { min-width: 0; min-height: 34px; padding: 4px 12px; font-size: 13px; letter-spacing: .08em; }
+.winner { display: flex; align-items: flex-end; gap: 12px; }
+.winchara { width: 90px; height: 110px; flex: none; background-repeat: no-repeat; background-position: center bottom; background-size: contain; filter: drop-shadow(0 4px 6px rgba(0, 0, 0, .5)); }
+@keyframes mhCharaIn { from { opacity: 0; translate: -30px 0; } to { opacity: 1; translate: 0 0; } }
+@media (orientation: portrait) { .mh-chara { width: 70vw; height: 46vh; bottom: 40vh; opacity: .9; } }
+
 /* 縦向き：ロゴを上に、パネルを下に */
 @media (orientation: portrait) {
   .mh-stage { left: 16px; right: 16px; width: auto; top: auto; bottom: max(24px, env(safe-area-inset-bottom, 0px)); transform: none; }
@@ -320,6 +344,86 @@ let myPid = store.get('mj.pid');
 if (!myPid) { myPid = 'p' + Math.random().toString(36).slice(2, 12); store.set('mj.pid', myPid); }
 let myName = store.get('mj.name') || '';
 
+/* ---------- キャラ（アバター） ----------
+   画像は公開サイトには置かない。各自が端末に読み込んだ「キャラ素材」から選び、
+   部屋の中では親機が全員に配る（親機の素材は参加者も選べる）。 */
+const AV = { pack: [], mine: null, room: {}, roomPack: [] };
+try { AV.pack = JSON.parse(store.get('mj.pack') || '[]'); } catch (e) { AV.pack = []; }
+AV.mine = store.get('mj.avatar') || null;
+function savePack() {
+  try { localStorage.setItem('mj.pack', JSON.stringify(AV.pack)); return true; }
+  catch (e) { toast('この端末に保存できる量を超えました。枚数を減らしてください'); return false; }
+}
+function setMine(src) {
+  AV.mine = src || null;
+  if (src) store.set('mj.avatar', src); else store.del('mj.avatar');
+}
+const isImg = (s) => typeof s === 'string' && s.startsWith('data:image/') && s.length < 400000;
+
+// 画像は大きいので、HTMLに直接書かずCSSのクラスにして使い回す
+const avStyle = document.createElement('style');
+document.head.appendChild(avStyle);
+const avKeys = new Map();
+function avClass(src) {
+  if (!src) return '';
+  let c = avKeys.get(src);
+  if (!c) {
+    c = 'avk' + (avKeys.size + 1);
+    avKeys.set(src, c);
+    avStyle.appendChild(document.createTextNode(`.${c}{background-image:url("${src}")}`));
+  }
+  return c;
+}
+function seatAvatar(seat) {
+  const st = S.seats[seat];
+  const key = st.uid || 'cpu' + seat;
+  return AV.room[key] || (st.uid === myPid ? AV.mine : null);
+}
+// 丸いアイコン：キャラがあれば顔のあたり、なければ名前の頭文字
+function avatarHTML(src, name, hue, extra) {
+  if (src) return `<span class="av img ${avClass(src)} ${extra || ''}"></span>`;
+  return `<span class="av ${extra || ''}" style="--hue:${hue}">${esc((name || '?').slice(0, 1))}</span>`;
+}
+
+// 端末の写真から読み込む：縦320pxに縮めて保存（透過があればPNG、なければJPEG）
+function shrinkImage(file) {
+  return new Promise((resolve) => {
+    const url = URL.createObjectURL(file);
+    const im = new Image();
+    im.onload = () => {
+      // 部屋の人へ1枚ずつ送るので、1枚およそ180KB以内に収まるまで縮める
+      let h = 320, out = null;
+      for (let tries = 0; tries < 6; tries++) {
+        let w = Math.round(im.width * h / im.height), hh = h;
+        if (w > 448) { w = 448; hh = Math.round(im.height * w / im.width); }
+        const cv = document.createElement('canvas');
+        cv.width = w; cv.height = hh;
+        const g = cv.getContext('2d');
+        g.imageSmoothingQuality = 'high';
+        g.drawImage(im, 0, 0, w, hh);
+        const corner = g.getImageData(0, 0, 1, 1).data[3];
+        out = corner < 250 ? cv.toDataURL('image/png') : cv.toDataURL('image/jpeg', 0.82);
+        if (out.length <= 180000) break;
+        h = Math.round(h * 0.8);
+      }
+      URL.revokeObjectURL(url);
+      resolve(out);
+    };
+    im.onerror = () => { URL.revokeObjectURL(url); resolve(null); };
+    im.src = url;
+  });
+}
+async function importPack(files) {
+  let n = 0;
+  for (const f of files) {
+    if (!f.type.startsWith('image/')) continue;
+    const src = await shrinkImage(f);
+    if (src) { AV.pack.push(src); n++; }
+  }
+  if (n && savePack()) toast(`${n}枚のキャラを読み込みました`);
+  render();
+}
+
 // role: home | host | client | local
 let role = 'home';
 let code = '';
@@ -365,7 +469,7 @@ function hostSeatOf(pid) { return HS.seats.findIndex((s) => s.uid === pid); }
 function hostCommit() {
   HS.seq++;
   for (const [pid, c] of conns) {
-    if (c.open) c.send({ t: 'state', S: viewFor(HS, hostSeatOf(pid)) });
+    if (c.open) sendMsg(c, { t: 'state', S: viewFor(HS, hostSeatOf(pid)) });
   }
   if (role === 'host') store.set('mj.hostroom', JSON.stringify({ code, HS }));
   setView(viewFor(HS, hostSeatOf(myPid)));
@@ -401,8 +505,9 @@ function hostHandle(pid, msg) {
       t.bot = !t.bot;
       break;
     }
-    case 'botseat': hostOnly(); lobbyOnly(); if (!HS.seats[msg.seat].uid) Object.assign(HS.seats[msg.seat], { bot: true, name: 'CPU ' + 'ABCD'[msg.seat] }); break;
-    case 'clearseat': hostOnly(); lobbyOnly(); if (msg.seat !== hostSeatOf(myPid)) HS.seats[msg.seat] = { uid: null, bot: false, name: '' }; break;
+    case 'botseat': hostOnly(); lobbyOnly(); if (!HS.seats[msg.seat].uid) { Object.assign(HS.seats[msg.seat], { bot: true, name: 'CPU ' + 'ABCD'[msg.seat] }); cpuAvatar(msg.seat); } break;
+    case 'clearseat': hostOnly(); lobbyOnly(); if (msg.seat !== hostSeatOf(myPid)) { HS.seats[msg.seat] = { uid: null, bot: false, name: '' }; hostSetAvatar('cpu' + msg.seat, null); } break;
+    case 'avatar': if (msg.src === null || isImg(msg.src)) hostSetAvatar(pid, msg.src); return;
     case 'rule': hostOnly(); lobbyOnly(); HS.rules[msg.k] = msg.v; break;
     case 'start':
       hostOnly(); lobbyOnly();
@@ -436,6 +541,23 @@ function hostJoin(pid, name, conn) {
   if (seat >= 0) { HS.seats[seat].name = (name || '').slice(0, 12) || '名無し'; HS.seats[seat].online = true; }
   conns.set(pid, conn);
   hostCommit();
+  // いま部屋にいる人のキャラと、親機のキャラ素材を新しく来た人に送る（1枚ずつ）
+  for (const [k, v] of Object.entries(AV.room)) sendMsg(conn, { t: 'avatar', key: k, src: v });
+  AV.pack.forEach((src, i) => sendMsg(conn, { t: 'packitem', i, src }));
+}
+
+// キャラを決めた・変えたことを、部屋の全員に知らせる（親機だけが呼ぶ）
+function hostSetAvatar(key, src) {
+  if (src) AV.room[key] = src; else delete AV.room[key];
+  for (const [, c] of conns) if (c.open) sendMsg(c, { t: 'avatar', key, src: src || null });
+  render();
+}
+// CPUの席には、親機のキャラ素材から空いているものをランダムに
+function cpuAvatar(seat) {
+  const used = new Set(Object.values(AV.room));
+  const free = AV.pack.filter((s) => !used.has(s));
+  const list = free.length ? free : AV.pack;
+  hostSetAvatar('cpu' + seat, list.length ? list[Math.floor(Math.random() * list.length)] : null);
 }
 
 // CPUの手番と、立直後のツモ切りは親機が進める
@@ -462,10 +584,34 @@ function scheduleBots() {
 
 function newCode() { return String(Math.floor(1000 + Math.random() * 9000)); }
 
+// PeerJSは大きいメッセージを黙って捨てるので、12000文字ずつに分けて送り、受け取った側でつなぎ直す
+const CHUNK = 12000;
+function sendMsg(c, obj) {
+  const s = JSON.stringify(obj);
+  if (s.length <= CHUNK) { c.send(obj); return; }
+  const id = Math.random().toString(36).slice(2);
+  const n = Math.ceil(s.length / CHUNK);
+  for (let i = 0; i < n; i++) c.send({ t: 'chunk', id, i, n, d: s.slice(i * CHUNK, (i + 1) * CHUNK) });
+}
+const inbox = new Map();
+function unchunk(msg) {
+  if (!msg || typeof msg !== 'object') return null;
+  if (msg.t !== 'chunk') return msg;
+  if (!(msg.n > 0 && msg.n <= 200 && msg.i >= 0 && msg.i < msg.n) || typeof msg.d !== 'string') return null;
+  let e = inbox.get(msg.id);
+  if (!e) { e = { parts: [], got: 0 }; inbox.set(msg.id, e); if (inbox.size > 50) inbox.delete(inbox.keys().next().value); }
+  if (e.parts[msg.i] === undefined) { e.parts[msg.i] = msg.d; e.got++; }
+  if (e.got < msg.n) return null;
+  inbox.delete(msg.id);
+  try { return JSON.parse(e.parts.join('')); } catch (err) { return null; }
+}
+
 function createRoom(resume) {
   if (!myName) return toast('名前を入れてください');
   role = 'host'; leaving = false;
-  if (resume) { code = resume.code; HS = resume.HS; }
+  AV.room = {}; AV.roomPack = [];
+  if (AV.mine) AV.room[myPid] = AV.mine;
+  if (resume) { code = resume.code; HS = resume.HS; HS.seats.forEach((s, i) => { if (s.bot && !s.uid) cpuAvatar(i); }); }
   else {
     code = newCode();
     HS = MJ.newGame({ length: 'hanchan', aka: true });
@@ -485,12 +631,17 @@ function openHostPeer(tries, resuming) {
   peer = new Peer(PREFIX + code);
   peer.on('open', () => { net = 'ok'; render(); });
   peer.on('connection', (c) => {
-    c.on('data', (msg) => {
+    c.on('data', (raw) => {
+      const msg = unchunk(raw);
       if (!msg || typeof msg !== 'object') return;
-      if (msg.t === 'hello') return hostJoin(String(msg.pid), String(msg.name || ''), c);
+      if (msg.t === 'hello') {
+        hostJoin(String(msg.pid), String(msg.name || ''), c);
+        if (isImg(msg.avatar)) hostSetAvatar(String(msg.pid), msg.avatar);
+        return;
+      }
       const pid = [...conns].find(([, x]) => x === c);
       if (!pid) return;
-      try { hostHandle(pid[0], msg); } catch (e) { c.send({ t: 'err', msg: e.message }); }
+      try { hostHandle(pid[0], msg); } catch (e) { sendMsg(c, { t: 'err', msg: e.message }); }
     });
     c.on('close', () => {
       for (const [pid, x] of conns) if (x === c) {
@@ -535,10 +686,17 @@ function connectHost() {
   net = S ? 'connecting' : net; render();
   const c = peer.connect(PREFIX + code, { reliable: true, serialization: 'json' });
   hostConn = c;
-  c.on('open', () => { net = 'ok'; c.send({ t: 'hello', pid: myPid, name: myName }); render(); });
-  c.on('data', (msg) => {
+  c.on('open', () => { net = 'ok'; sendMsg(c, { t: 'hello', pid: myPid, name: myName, avatar: AV.mine }); render(); });
+  c.on('data', (raw) => {
+    const msg = unchunk(raw);
+    if (!msg) return;
     if (msg.t === 'state') setView(msg.S);
     if (msg.t === 'err') toast(msg.msg);
+    if (msg.t === 'avatar' && typeof msg.key === 'string') {
+      if (isImg(msg.src)) AV.room[msg.key] = msg.src; else delete AV.room[msg.key];
+      render();
+    }
+    if (msg.t === 'packitem' && isImg(msg.src) && msg.i >= 0 && msg.i < 60) { AV.roomPack[msg.i] = msg.src; if (ui.picker) render(); }
   });
   c.on('close', () => { if (hostConn === c && !leaving) { net = 'lost'; render(); retry(2000); } });
 }
@@ -551,7 +709,7 @@ function retry(ms) {
 function send(msg) {
   if (role === 'host' || role === 'local') {
     try { hostHandle(myPid, msg); } catch (e) { toast(e.message); }
-  } else if (hostConn && hostConn.open) hostConn.send(msg);
+  } else if (hostConn && hostConn.open) sendMsg(hostConn, msg);
   else toast('親機とつながっていません。再接続を待ってください');
 }
 
@@ -562,6 +720,7 @@ function leaveRoom() {
   peer = null; hostConn = null; conns.clear();
   if (role === 'host') store.del('mj.hostroom');
   role = 'home'; S = null; HS = null; ui = { sel: null, riichi: false, menu: false };
+  AV.room = {}; AV.roomPack = [];
   history.replaceState(null, '', location.pathname);
   render();
 }
@@ -570,6 +729,9 @@ function startPractice() {
   role = 'local'; leaving = false;
   HS = MJ.newGame({ length: 'tonpu', aka: true });
   HS.seats = [{ uid: myPid, bot: false, name: myName || 'あなた' }, { uid: null, bot: true, name: 'CPU A' }, { uid: null, bot: true, name: 'CPU B' }, { uid: null, bot: true, name: 'CPU C' }];
+  AV.room = {}; AV.roomPack = [];
+  if (AV.mine) AV.room[myPid] = AV.mine;
+  [1, 2, 3].forEach(cpuAvatar);
   MJ.startGame(HS);
   hostCommit();
 }
@@ -710,11 +872,13 @@ function riverHTML(seat) {
 
 function render() {
   app.classList.remove('is-game');
+  document.body.classList.remove('in-game');
   if (role === 'home') { app.innerHTML = homeHTML(); startFx(); return; }
   cancelAnimationFrame(fxRaf);
   if (!S) { app.innerHTML = `<div class="lobby"><h1>社内麻雀卓</h1><p class="lead">部屋 ${esc(code)} に接続しています…</p>${netNote()}<button class="ghost" data-act="leave">やめる</button></div>`; return; }
   if (S.phase === 'lobby') { app.innerHTML = lobbyHTML(); return; }
   app.classList.add('is-game');
+  document.body.classList.add('in-game');
   app.innerHTML = gameHTML();
 }
 
@@ -749,6 +913,22 @@ const CREST = `<svg class="mh-crest" viewBox="0 0 120 120" aria-hidden="true">
   <text x="60" y="57" font-family="'Hiragino Mincho ProN','Yu Mincho',serif" font-size="32" font-weight="700" fill="#c8282a" text-anchor="middle" dominant-baseline="central">中</text>
 </svg>`;
 
+// キャラ一覧（横にスクロール）。先頭は「なし」
+let pickList = [];
+function charaGrid(list, act) {
+  pickList = list;
+  return `<div class="mh-chars"><button class="mh-char none ${!AV.mine ? 'on' : ''}" data-act="${act}" data-i="-1"><span>なし</span></button>` +
+    list.map((src, i) => `<button class="mh-char ${AV.mine === src ? 'on' : ''}" data-act="${act}" data-i="${i}" aria-label="キャラ${i + 1}"><span class="ch ${avClass(src)}"></span></button>`).join('') + '</div>';
+}
+
+// 部屋の中でキャラを選ぶ：親機の素材＋自分の素材
+function roomPickHTML() {
+  const list = [...new Set([...AV.roomPack.filter(Boolean), ...AV.pack])];
+  return `<div class="sheet-bg" data-act="picker-close"><div class="sheet" data-stop="1"><h2>キャラを選ぶ</h2>
+    ${list.length ? charaGrid(list, 'pick-room') : '<p class="muted">選べるキャラがありません。親機の人か自分が、トップ画面の「名前を変える」からキャラ素材を読み込むと選べます。</p>'}
+    <div class="btnrow"><button data-act="picker-close">閉じる</button></div></div></div>`;
+}
+
 function mhPanel(title, body, actions) {
   return `<section class="mh-panel"><header class="mh-head"><span class="mh-gem"></span><h2>${title}</h2><span class="mh-gem"></span></header>
     <div class="mh-body">${body}</div>${actions ? `<footer class="mh-actions">${actions}</footer>` : ''}</section>`;
@@ -770,7 +950,7 @@ function homeHTML() {
       saved ? ['resume', `前の部屋 ${saved.code} を再開`, '親機だった部屋を続きから再開します'] : null,
       ['practice', 'ひとりで練習', 'CPU 3人を相手に東風戦を打ちます'],
       isFull() ? null : ['full', '全画面で遊ぶ', '画面いっぱいに表示します'],
-      ['go-name', '名前を変える', `いまの名前：${myName || '未設定'}`],
+      ['go-name', '名前とキャラ', `いまの名前：${myName || '未設定'}${AV.pack.length ? ` ・ キャラ素材 ${AV.pack.length}枚` : ''}`],
       ['go-help', '遊び方・ルール', '親機の役目とルールを確認します'],
     ].filter(Boolean);
     panel = mhPanel('メインメニュー', `<div class="mh-list">${items.map(([a, l, s], i) =>
@@ -780,7 +960,13 @@ function homeHTML() {
       `<label class="mh-field"><span>部屋番号（4桁）</span><input id="code" class="mh-code" inputmode="numeric" maxlength="4" placeholder="0000" value="${esc(q)}" autocomplete="off"></label>${nameField}`,
       `<button class="mh-btn ghost" data-act="home-back">もどる</button><button class="mh-btn" data-act="join">参加する</button>`);
   } else if (view === 'name') {
-    panel = mhPanel('名前を決める', `${nameField}<p class="mh-note">ほかの人の画面に、この名前で表示されます。</p>`,
+    const packNote = AV.pack.length
+      ? ''
+      : '<p class="mh-note">キャラ素材（画像）を読み込むと、ここから選べます。部屋の中では、親機の人が読み込んだキャラからも選べます。</p>';
+    panel = mhPanel('名前とキャラを決める', `${nameField}
+      <div class="mh-field"><span>キャラ</span>${charaGrid(AV.pack, 'pick-own')}</div>${packNote}
+      <div class="mh-packbtns"><button class="mh-btn ghost small" data-act="import">キャラ素材を読み込む</button>
+        ${AV.pack.length ? '<button class="mh-btn ghost small" data-act="clear-pack">素材を全部消す</button>' : ''}</div>`,
       `${myName ? '<button class="mh-btn ghost" data-act="home-back">もどる</button>' : ''}<button class="mh-btn" data-act="name-ok">決定</button>`);
   } else if (view === 'help') {
     panel = mhPanel('遊び方・ルール', `<div class="mh-help">
@@ -795,8 +981,10 @@ function homeHTML() {
     <div class="mh-far"></div><div class="mh-near"></div>
     <canvas class="mh-fx" id="mhfx"></canvas><div class="mh-vignette"></div>
     <div class="mh-logo ${title ? 'big' : 'small'}">${CREST}<div class="mh-title"><span class="mh-ja">社内麻雀卓</span><span class="mh-en">SHANAI MAHJONG ・ FOUR PLAYERS</span></div></div>
+    ${!title && AV.mine ? `<div class="mh-chara ${avClass(AV.mine)}"></div>` : ''}
     ${title ? '<div class="mh-press">― タップしてはじめる ―</div>' : `<div class="mh-stage">${panel}</div>`}
-    ${!title && myName ? `<div class="mh-who"><span class="av" style="--hue:30">${esc(myName.slice(0, 1))}</span><div><span>PLAYER</span><b>${esc(myName)}</b></div></div>` : ''}
+    ${!title && myName ? `<div class="mh-who">${avatarHTML(AV.mine, myName, 30)}<div><span>PLAYER</span><b>${esc(myName)}</b></div></div>` : ''}
+    <input type="file" id="packfile" accept="image/*" multiple hidden>
     <div class="mh-foot">${title ? 'ログイン不要 ・ iPhoneを横にして遊べます' : ''}</div>
     ${ui.fullhelp ? fullHelpHTML() : ''}
   </div>`;
@@ -876,7 +1064,8 @@ function lobbyHTML() {
         else if (s.uid !== myPid) btns = `<button class="small ghost" data-act="clearseat" data-seat="${i}">空ける</button>`;
       }
       const dot = s.uid ? `<span class="dot ${s.uid === myPid || s.online ? '' : 'off'}"></span>` : '';
-      return `<div class="seat ${s.uid === myPid ? 'me' : ''}"><div class="no">席 ${i + 1}${s.uid && i === hostSeatIndex() ? '・親機' : ''}</div><div class="nm" style="display:flex;gap:6px;align-items:center">${dot}${esc(nameOf(i))}</div><div class="btns">${btns}</div></div>`;
+      const av = s.uid || s.bot ? avatarHTML(seatAvatar(i), nameOf(i), (i * 83 + 200) % 360, 'lg') : '';
+      return `<div class="seat ${s.uid === myPid ? 'me' : ''}"><div class="no">席 ${i + 1}${s.uid && i === hostSeatIndex() ? '・親機' : ''}</div><div class="nm" style="display:flex;gap:8px;align-items:center">${av}${dot}${esc(nameOf(i))}</div><div class="btns">${btns}</div></div>`;
     }).join('')}</div></section>
     ${host ? `
     <section class="field"><span>長さ</span><div class="seg">
@@ -887,7 +1076,9 @@ function lobbyHTML() {
       <button class="${!S.rules.aka ? 'on' : ''}" data-act="rule" data-k="aka" data-v="0">なし</button></div></section>
     <button class="hot" data-act="start" ${filled ? '' : 'disabled'}>対局開始</button>`
     : `<p class="muted">${S.rules.length === 'tonpu' ? '東風戦' : '半荘戦'}・赤ドラ${S.rules.aka ? 'あり' : 'なし'}。親機の人が開始するのを待っています。</p>`}
+    ${mySeat() >= 0 ? `<button class="ghost" data-act="picker">キャラを選ぶ</button>` : ''}
     <button class="ghost" data-act="leave">${host ? '部屋を閉じる' : '部屋から出る'}</button>
+    ${ui.picker ? roomPickHTML() : ''}
   </div>`;
 }
 
@@ -909,7 +1100,7 @@ function gameHTML() {
     const tags = (p.riichi ? '<span class="tag">リーチ</span>' : '') +
       (st.bot && st.uid ? '<span class="tag cpu">代打ち</span>' : '') + (off ? '<span class="tag cpu">切断中</span>' : '');
     return `<div class="plate pl-${pos} ${turnSeat === s ? 'turn' : ''}">
-      <span class="av" style="--hue:${(s * 83 + 200) % 360}">${esc(nm.slice(0, 1))}</span>
+      ${avatarHTML(seatAvatar(s), nm, (s * 83 + 200) % 360)}
       <div class="pinfo"><span class="pn">${esc(nm)}</span>
       <span class="ps"><b class="${s === d ? 'dealer' : ''}">${wind(s)}</b>${S.scores[s].toLocaleString()}</span>${tags ? `<span class="ptags">${tags}</span>` : ''}</div></div>`;
   };
@@ -1044,7 +1235,7 @@ function resultHTML() {
       const how = R.type === 'tsumo' ? 'ツモ' : `ロン ← ${esc(nameOf(w.from))}`;
       const head = sc.yakuman ? sc.limit : `${sc.fu}符 ${sc.han}翻${sc.limit ? ' ' + sc.limit : ''}`;
       return `<div style="display:flex;flex-direction:column;gap:10px">
-        <h2>${esc(nameOf(w.seat))} ${how}</h2>
+        <div class="winner">${seatAvatar(w.seat) ? `<span class="winchara ${avClass(seatAvatar(w.seat))}"></span>` : ''}<h2>${esc(nameOf(w.seat))} ${how}</h2></div>
         ${handBlock(w.hand, w.melds, w.seat, w.tile)}
         <div class="yaku">${sc.yaku.map((y) => `<span>${esc(y.name)}</span><span>${typeof y.han === 'number' ? y.han + '翻' : y.han}</span>`).join('')}</div>
         <div class="big">${head}　${sc.total.toLocaleString()}点</div></div>`;
@@ -1084,6 +1275,14 @@ function endHTML() {
 }
 
 /* ---------- 操作 ---------- */
+
+app.addEventListener('change', (e) => {
+  if (e.target.id === 'packfile' && e.target.files && e.target.files.length) {
+    const files = [...e.target.files];
+    e.target.value = '';
+    importPack(files);
+  }
+});
 
 app.addEventListener('input', (e) => {
   if (e.target.id === 'name') { myName = e.target.value.trim().slice(0, 12); store.set('mj.name', myName); }
@@ -1152,6 +1351,23 @@ function onAct(a, ds) {
     }
     case 'menu': ui.menu = true; return render();
     case 'menu-close': ui.menu = false; return render();
+    case 'import': { const f = document.getElementById('packfile'); if (f) f.click(); return; }
+    case 'clear-pack': AV.pack = []; savePack(); toast('キャラ素材を消しました'); return render();
+    case 'pick-own': {
+      const i = +ds.i;
+      setMine(i < 0 ? null : pickList[i]);
+      return render();
+    }
+    case 'picker': ui.picker = true; return render();
+    case 'picker-close': ui.picker = false; return render();
+    case 'pick-room': {
+      const i = +ds.i;
+      const src = i < 0 ? null : pickList[i];
+      setMine(src);
+      ui.picker = false;
+      send({ cmd: 'avatar', src });
+      return render();
+    }
     case 'full': return goFull();
     case 'fullhelp-close': ui.fullhelp = false; return render();
     case 'yaku': ui.yaku = true; return render();
