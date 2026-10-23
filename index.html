@@ -194,6 +194,16 @@ html:has(body.in-game) { overflow: hidden; }
   background-repeat: no-repeat; background-position: left bottom; background-size: contain; pointer-events: none;
   filter: drop-shadow(0 0 18px rgba(255, 170, 60, .35)) drop-shadow(0 6px 10px rgba(0, 0, 0, .6)); animation: mhCharaIn .7s cubic-bezier(.2, .8, .2, 1) both; }
 .mh-who { z-index: 2; }
+.mh-chara-name { position: absolute; left: max(18px, env(safe-area-inset-left, 0px)); bottom: calc(max(16px, env(safe-area-inset-bottom, 0px)) + 58px); z-index: 2;
+  padding: 4px 14px 5px; border: 1px solid rgba(216, 178, 90, .7); border-radius: 4px; pointer-events: none;
+  background: linear-gradient(90deg, rgba(110, 75, 27, .95), rgba(58, 37, 11, .75)); box-shadow: 0 4px 12px rgba(0, 0, 0, .5); animation: mhFadeUp .35s ease-out both; }
+.mh-chara-name span { display: block; font-size: 9px; letter-spacing: .3em; color: var(--mh-gold); }
+.mh-chara-name b { font-family: var(--f-disp); font-weight: 400; font-size: 18px; letter-spacing: .1em; color: #fbe7b0; text-shadow: 0 2px 0 #000; }
+#chara-stage.in-name .mh-chara-name, #chara-stage.in-setup .mh-chara-name { bottom: max(16px, env(safe-area-inset-bottom, 0px)); }
+@media (orientation: landscape) {
+  .room-setup { place-items: center end; }
+  .room-setup .mh-panel { width: min(520px, 58vw); }
+}
 .mh-chars { position: relative; display: flex; gap: 8px; overflow-x: auto; padding: 4px 2px 8px; scrollbar-width: thin; }
 .mh-char { flex: none; width: 66px; height: 86px; padding: 0; min-height: 0; border-radius: 6px; background: rgba(0, 0, 0, .45);
   border: 1px solid #6b5426; box-shadow: none; display: grid; place-items: center; color: var(--mh-dim); font-weight: 500; font-size: 12px; }
@@ -397,17 +407,23 @@ let myName = store.get('mj.name') || '';
 /* ---------- キャラ（アバター） ----------
    画像は公開サイトには置かない。各自が端末に読み込んだ「キャラ素材」から選び、
    部屋の中では親機が全員に配る（親機の素材は参加者も選べる）。 */
-const AV = { pack: [], mine: null, room: {}, roomPack: [] };
+// キャラ素材は { src: 画像, name: キャラ名（ファイル名から） } の一覧
+const AV = { pack: [], mine: null, mineName: '', room: {}, roomPack: [] };
 try { AV.pack = JSON.parse(store.get('mj.pack') || '[]'); } catch (e) { AV.pack = []; }
+AV.pack = AV.pack.map((p) => (typeof p === 'string' ? { src: p, name: '' } : p)).filter((p) => p && p.src); // 名前のない古い形式も読める
 AV.mine = store.get('mj.avatar') || null;
+AV.mineName = store.get('mj.avatarName') || '';
 function savePack() {
   try { localStorage.setItem('mj.pack', JSON.stringify(AV.pack)); return true; }
   catch (e) { toast('この端末に保存できる量を超えました。枚数を減らしてください'); return false; }
 }
-function setMine(src) {
-  AV.mine = src || null;
-  if (src) store.set('mj.avatar', src); else store.del('mj.avatar');
+function setMine(c) {
+  AV.mine = (c && c.src) || null;
+  AV.mineName = (c && c.name) || '';
+  if (AV.mine) store.set('mj.avatar', AV.mine); else store.del('mj.avatar');
+  store.set('mj.avatarName', AV.mineName);
 }
+const cleanName = (s) => String(s || '').replace(/\.[a-z0-9]+$/i, '').trim().slice(0, 30);
 const isImg = (s) => typeof s === 'string' && s.startsWith('data:image/') && s.length < 400000;
 
 // 画像は大きいので、HTMLに直接書かずCSSのクラスにして使い回す
@@ -465,11 +481,17 @@ function shrinkImage(file) {
 }
 async function importPack(files) {
   let n = 0;
+  // 前に読み込んだ名前なしのキャラだけなら、読み込み直しで置き換える
+  if (AV.pack.length && AV.pack.every((p) => !p.name)) AV.pack = [];
   for (const f of files) {
     // 「ファイル」から選ぶと種類が空のことがあるので、拡張子でも判定する
     if (!f.type.startsWith('image/') && !/\.(png|jpe?g|webp|gif|heic)$/i.test(f.name)) continue;
     const src = await shrinkImage(f);
-    if (src) { AV.pack.push(src); n++; }
+    if (!src) continue;
+    const name = cleanName(f.name);
+    const same = AV.pack.findIndex((p) => (name && p.name === name) || p.src === src);
+    if (same >= 0) AV.pack[same] = { src, name }; else AV.pack.push({ src, name }); // 同じキャラは上書き
+    n++;
   }
   if (n && savePack()) toast(`${n}枚のキャラを読み込みました`);
   render();
@@ -595,7 +617,7 @@ function hostJoin(pid, name, conn) {
   hostCommit();
   // いま部屋にいる人のキャラと、親機のキャラ素材を新しく来た人に送る（1枚ずつ）
   for (const [k, v] of Object.entries(AV.room)) sendMsg(conn, { t: 'avatar', key: k, src: v });
-  AV.pack.forEach((src, i) => sendMsg(conn, { t: 'packitem', i, src }));
+  AV.pack.forEach((p, i) => sendMsg(conn, { t: 'packitem', i, src: p.src, name: p.name }));
 }
 
 // キャラを決めた・変えたことを、部屋の全員に知らせる（親機だけが呼ぶ）
@@ -607,8 +629,9 @@ function hostSetAvatar(key, src) {
 // CPUの席には、親機のキャラ素材から空いているものをランダムに
 function cpuAvatar(seat) {
   const used = new Set(Object.values(AV.room));
-  const free = AV.pack.filter((s) => !used.has(s));
-  const list = free.length ? free : AV.pack;
+  const all = AV.pack.map((p) => p.src);
+  const free = all.filter((s) => !used.has(s));
+  const list = free.length ? free : all;
   hostSetAvatar('cpu' + seat, list.length ? list[Math.floor(Math.random() * list.length)] : null);
 }
 
@@ -748,7 +771,7 @@ function connectHost() {
       if (isImg(msg.src)) AV.room[msg.key] = msg.src; else delete AV.room[msg.key];
       render();
     }
-    if (msg.t === 'packitem' && isImg(msg.src) && msg.i >= 0 && msg.i < 60) { AV.roomPack[msg.i] = msg.src; refreshSetupGrid(); }
+    if (msg.t === 'packitem' && isImg(msg.src) && msg.i >= 0 && msg.i < 60) { AV.roomPack[msg.i] = { src: msg.src, name: cleanName(msg.name) }; refreshSetupGrid(); }
   });
   c.on('close', () => { if (hostConn === c && !leaving) { net = 'lost'; render(); retry(2000); } });
 }
@@ -775,6 +798,7 @@ function leaveRoom() {
   AV.room = {}; AV.roomPack = [];
   history.replaceState(null, '', location.pathname);
   render();
+  applyUpdateIfIdle(); // 部屋にいる間に新しい版が出ていたら、ここで更新
 }
 
 function startPractice() {
@@ -985,7 +1009,17 @@ let pickList = [];
 function charaGrid(list, act) {
   pickList = list;
   return `<div class="mh-chars"><button class="mh-char none ${!AV.mine ? 'on' : ''}" data-act="${act}" data-i="-1"><span>なし</span></button>` +
-    list.map((src, i) => `<button class="mh-char ${AV.mine === src ? 'on' : ''}" data-act="${act}" data-i="${i}" aria-label="キャラ${i + 1}"><span class="ch ${avClass(src)}"></span></button>`).join('') + '</div>';
+    list.map((p, i) => `<button class="mh-char ${AV.mine === p.src ? 'on' : ''}" data-act="${act}" data-i="${i}" aria-label="${esc(p.name || 'キャラ' + (i + 1))}"><span class="ch ${avClass(p.src)}"></span></button>`).join('') + '</div>';
+}
+
+// 左側の大きな立ち絵とキャラ名。選ぶたびにここだけ差し替える
+function charaStageHTML() {
+  if (!AV.mine) return '';
+  return `<div class="mh-chara ${avClass(AV.mine)}"></div>${AV.mineName ? `<div class="mh-chara-name"><span>CHARACTER</span><b>${esc(AV.mineName)}</b></div>` : ''}`;
+}
+function refreshStage() {
+  const el = document.getElementById('chara-stage');
+  if (el) el.innerHTML = charaStageHTML();
 }
 
 // キャラ一覧を開いたら、いま選んでいるキャラが見える位置まで横に送る
@@ -996,12 +1030,15 @@ function showPicked() {
 }
 
 // 部屋に入ったら名前とキャラを決める。キャラは親機の素材＋自分の素材から
-function roomCharas() { return [...new Set([...AV.roomPack.filter(Boolean), ...AV.pack])]; }
+function roomCharas() {
+  const seen = new Set();
+  return [...AV.roomPack.filter(Boolean), ...AV.pack].filter((p) => !seen.has(p.src) && seen.add(p.src));
+}
 function roomSetupHTML() {
   const list = roomCharas();
   const grid = list.length ? charaGrid(list, 'pick-setup')
     : '<div class="mh-chars"></div><p class="mh-note">親機の人がキャラ素材を読み込んでいれば、ここに出てきます。</p>';
-  return `<div class="room-setup">${mhPanel('名前とキャラを決める',
+  return `<div class="room-setup"><div id="chara-stage" class="in-setup">${charaStageHTML()}</div>${mhPanel('名前とキャラを決める',
     `<label class="mh-field"><span>あなたの名前</span><input id="name" maxlength="12" placeholder="例：大久保" value="${esc(myName)}" autocomplete="nickname"></label>
      <div class="mh-field"><span>キャラ</span>${grid}</div>`,
     `<button class="mh-btn" data-act="setup-ok">決定</button>`)}</div>`;
@@ -1058,9 +1095,7 @@ function homeHTML() {
       : '<p class="mh-note">キャラ素材（画像）を読み込むと、ここから選べます。部屋の中では、親機の人が読み込んだキャラからも選べます。</p>';
     panel = mhPanel('名前とキャラを決める', `${nameField}
       <div class="mh-field"><span>キャラ</span>${charaGrid(AV.pack, 'pick-own')}</div>${packNote}
-      <div class="mh-packbtns"><button class="mh-btn ghost small" data-act="import" data-src="packfiles">「ファイル」から読み込む</button>
-        <button class="mh-btn ghost small" data-act="import" data-src="packphotos">写真から読み込む</button>
-        ${AV.pack.length ? '<button class="mh-btn ghost small" data-act="clear-pack">素材を全部消す</button>' : ''}</div>`,
+      <div class="mh-packbtns"><button class="mh-btn ghost small" data-act="import">キャラ素材を読み込む</button></div>`,
       `<button class="mh-btn ghost" data-act="home-back">もどる</button><button class="mh-btn" data-act="name-ok">決定</button>`);
   }
 
@@ -1069,11 +1104,10 @@ function homeHTML() {
     <div class="mh-far"></div><div class="mh-near"></div>
     <canvas class="mh-fx" id="mhfx"></canvas><div class="mh-vignette"></div>
     <div class="mh-logo ${title ? 'big' : 'small'}">${CREST}<div class="mh-title"><span class="mh-ja">社内麻雀卓</span><span class="mh-en">SHANAI MAHJONG ・ FOUR PLAYERS</span></div></div>
-    ${!title && AV.mine ? `<div class="mh-chara ${avClass(AV.mine)}"></div>` : ''}
+    ${!title ? `<div id="chara-stage" class="${view === 'name' ? 'in-name' : ''}">${charaStageHTML()}</div>` : ''}
     ${title ? '<div class="mh-press">― タップしてはじめる ―</div>' : `<div class="mh-stage">${panel}</div>`}
     ${!title && view !== 'name' ? `<button class="mh-who" data-act="go-name" aria-label="名前とキャラを変える">${avatarHTML(AV.mine, myName || '?', 30)}<div><span>PLAYER ・ タップで変更</span><b>${esc(myName || '名前を決める')}</b></div></button>` : ''}
-    <input type="file" id="packfiles" class="packinput" accept=".png,.jpg,.jpeg,.webp,.gif,.heic,image/png,image/jpeg,image/webp" multiple hidden>
-    <input type="file" id="packphotos" class="packinput" accept="image/*" multiple hidden>
+    <input type="file" id="packfile" class="packinput" accept="image/*,.png,.jpg,.jpeg,.webp,.heic" multiple hidden>
     <div class="mh-foot">${title ? 'ログイン不要 ・ iPhoneを横にして遊べます' : ''}</div>
     ${ui.fullhelp ? fullHelpHTML() : ''}
   </div>`;
@@ -1442,13 +1476,13 @@ function onAct(a, ds) {
     }
     case 'menu': ui.menu = true; return render();
     case 'menu-close': ui.menu = false; return render();
-    case 'import': { const f = document.getElementById(ds.src || 'packfiles'); if (f) f.click(); return; }
-    case 'clear-pack': AV.pack = []; savePack(); toast('キャラ素材を消しました'); return render();
+    case 'import': { const f = document.getElementById('packfile'); if (f) f.click(); return; }
     case 'pick-own': {
       // 画面を描き直すと一覧が先頭に戻るので、選択の印だけ付け替える
       const i = +ds.i;
       setMine(i < 0 ? null : pickList[i]);
       document.querySelectorAll('.mh-char').forEach((b) => b.classList.toggle('on', +b.dataset.i === i));
+      refreshStage();
       return;
     }
     // 部屋に入ったときの「名前とキャラを決める」
@@ -1457,6 +1491,7 @@ function onAct(a, ds) {
       const i = +ds.i;
       setMine(i < 0 ? null : pickList[i]);
       document.querySelectorAll('.room-setup .mh-char').forEach((b) => b.classList.toggle('on', +b.dataset.i === i));
+      refreshStage();
       return;
     }
     case 'setup-ok':
@@ -1497,6 +1532,33 @@ function onAct(a, ds) {
     case 'tolobby': ui.menu = false; return send({ cmd: 'tolobby' });
   }
 }
+
+/* ---------- 更新の確認 ----------
+   ホーム画面から開くと古いページが残っていることがあるので、version.json を毎回取りに行き、
+   新しい版があればURLを変えて読み込み直す（部屋の中にいるときは、部屋を出てから） */
+const BUILD = '2026-10-24.1';
+let newBuild = null, updateToldInRoom = false;
+function applyUpdateIfIdle() {
+  if (!newBuild) return;
+  if (role !== 'home') {
+    if (!updateToldInRoom) { updateToldInRoom = true; toast('新しい版があります。部屋を出ると更新されます'); }
+    return;
+  }
+  // 読み込み直しても古いままだったときに、何度も読み込み直さないように
+  try { if (sessionStorage.getItem('mj.reloadedFor') === newBuild) return; sessionStorage.setItem('mj.reloadedFor', newBuild); } catch (e) { /* 保存できなくても続ける */ }
+  const room = new URLSearchParams(location.search).get('room');
+  location.replace(location.pathname + '?v=' + encodeURIComponent(newBuild) + (room ? '&room=' + encodeURIComponent(room) : ''));
+}
+async function checkUpdate() {
+  try {
+    const r = await fetch('version.json?t=' + Date.now(), { cache: 'no-store' });
+    if (!r.ok) return;
+    const v = await r.json();
+    if (v && v.build && v.build !== BUILD) { newBuild = v.build; applyUpdateIfIdle(); }
+  } catch (e) { /* オフラインなどは無視 */ }
+}
+document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') checkUpdate(); });
+checkUpdate();
 
 render();
 </script>
