@@ -19,7 +19,8 @@
   --f-disp: "Zen Antique", "Hiragino Mincho ProN", "Yu Mincho", serif;
   color-scheme: dark;
 }
-html, body { background: var(--felt-deep); color: var(--text); }
+/* 画面の下端（ホームバーの所など）に下地が見えても目立たないよう、下地は黒にする */
+html, body { background: #050403; color: var(--text); overscroll-behavior: none; }
 body {
   font-family: var(--f-ui); font-size: 14px; -webkit-text-size-adjust: 100%;
   padding-left: max(12px, env(safe-area-inset-left, 0px));

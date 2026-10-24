@@ -5,14 +5,14 @@
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<meta name="theme-color" content="#0d2629">
+<meta name="theme-color" content="#050403">
 <meta name="apple-mobile-web-app-title" content="社内麻雀卓">
 <link rel="manifest" href="manifest.json">
 <link rel="apple-touch-icon" href="icon-180.png">
 <title>社内麻雀卓</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Zen+Antique&family=Zen+Kaku+Gothic+New:wght@500;700&display=swap">
-<link rel="stylesheet" href="style.css?v=7">
+<link rel="stylesheet" href="style.css?v=8">
 <style>
 [hidden] { display: none !important; }
 body { margin: 0; padding-top: max(8px, env(safe-area-inset-top, 0px)); padding-bottom: max(16px, env(safe-area-inset-bottom, 0px)); }
@@ -1573,7 +1573,7 @@ function onAct(a, ds) {
 /* ---------- 更新の確認 ----------
    ホーム画面から開くと古いページが残っていることがあるので、version.json を毎回取りに行き、
    新しい版があればURLを変えて読み込み直す（部屋の中にいるときは、部屋を出てから） */
-const BUILD = '2026-10-24.2';
+const BUILD = '2026-10-24.3';
 let newBuild = null, updateToldInRoom = false;
 function applyUpdateIfIdle() {
   if (!newBuild) return;
