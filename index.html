@@ -1274,6 +1274,16 @@ function render() {
   for (const e of events) {
     if (e.t === 'discard') { if (!reduceMotion()) flyDiscard(e.seat, rects); } else callFx(e);
   }
+  // 音：同時に起きたことは一番大きいものだけ鳴らす
+  const kinds = events.map((e) => (e.t === 'discard' ? 'discard' : e.kind));
+  const loud = ['win', 'draw', 'riichi', 'call', 'discard'].find((k) => kinds.includes(k));
+  if (loud) gsfx(loud);
+  if (loud === 'riichi' && kinds.includes('discard')) gsfx('discard');
+  // 自分の番・自分が鳴けるときに、軽く知らせる
+  const me = mySeat();
+  const myCue = me >= 0 && !S.seats[me].bot && ((S.phase === 'turn' && S.turn === me) || (S.phase === 'claim' && S.claim.options[me] && !S.claim.responses[me]));
+  if (myCue && !render.myCue && events.length) setTimeout(() => gsfx('myturn'), 420);
+  render.myCue = myCue;
   resTick();
 }
 
@@ -1468,10 +1478,67 @@ function sfx(kind) {
       o.connect(g); g.connect(actx.destination);
       o.start(t + at); o.stop(t + at + dur + 0.02);
     };
-    if (kind === 'start') { tone(392, 0, .5, 'triangle', .09); tone(523, .08, .5, 'triangle', .08); tone(784, .16, .7, 'triangle', .07); }
-    else if (kind === 'back') tone(440, 0, .12, 'square', .03);
-    else { tone(880, 0, .09, 'square', .035); tone(1320, .06, .16, 'triangle', .05); }
+    // 短い雑音（牌が卓に当たる音・点棒の音に使う）
+    const noise = (at, dur, freq, q, vol) => {
+      if (!sfx.noiseBuf) {
+        const b = actx.createBuffer(1, actx.sampleRate * 0.3, actx.sampleRate), d = b.getChannelData(0);
+        for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
+        sfx.noiseBuf = b;
+      }
+      const s = actx.createBufferSource(), f = actx.createBiquadFilter(), g = actx.createGain();
+      s.buffer = sfx.noiseBuf; f.type = 'bandpass'; f.frequency.value = freq; f.Q.value = q;
+      g.gain.setValueAtTime(vol, t + at); g.gain.exponentialRampToValueAtTime(0.0001, t + at + dur);
+      s.connect(f); f.connect(g); g.connect(actx.destination);
+      s.start(t + at); s.stop(t + at + dur + 0.02);
+    };
+    const sweep = (f0, f1, at, dur, type, vol) => {
+      const o = actx.createOscillator(), g = actx.createGain();
+      o.type = type; o.frequency.setValueAtTime(f0, t + at); o.frequency.exponentialRampToValueAtTime(f1, t + at + dur);
+      g.gain.setValueAtTime(0.0001, t + at); g.gain.exponentialRampToValueAtTime(vol, t + at + 0.02); g.gain.exponentialRampToValueAtTime(0.0001, t + at + dur);
+      o.connect(g); g.connect(actx.destination); o.start(t + at); o.stop(t + at + dur + 0.02);
+    };
+    switch (kind) {
+      case 'start': tone(392, 0, .5, 'triangle', .09); tone(523, .08, .5, 'triangle', .08); tone(784, .16, .7, 'triangle', .07); break;
+      case 'back': tone(440, 0, .12, 'square', .03); break;
+      // ここから対局中の音
+      case 'pick': noise(0, .03, 3800, 2, .12); break; // 牌を選んだ
+      case 'discard': // 牌を河に置く「カチッ」（飛ぶ動きの着地に合わせて少し遅らせる）
+        noise(.36, .05, 2600, 3, .5); noise(.36, .09, 900, 1.5, .25); tone(170, .36, .06, 'sine', .12); break;
+      case 'call': // ポン・チー・カン
+        tone(660, 0, .1, 'square', .05); tone(990, .08, .18, 'square', .05); noise(0, .05, 2000, 2, .2); break;
+      case 'riichi': // リーチ：駆け上がる音と、点棒を置く音
+        sweep(220, 880, 0, .35, 'sawtooth', .05); tone(1175, .3, .5, 'triangle', .08); tone(1568, .38, .6, 'triangle', .06); noise(.32, .06, 3000, 4, .3); break;
+      case 'win': // ツモ・ロン：ドンと鳴って和音がきらめく
+        tone(55, 0, .5, 'sine', .35); noise(0, .25, 300, .8, .4);
+        [523, 659, 784, 1047].forEach((f, i) => tone(f, .05 + i * .06, 1.1, 'triangle', .07));
+        [2093, 2637, 3136].forEach((f, i) => tone(f, .3 + i * .08, .5, 'sine', .03)); break;
+      case 'draw': tone(392, 0, .5, 'triangle', .07); tone(330, .18, .5, 'triangle', .07); tone(262, .36, .9, 'triangle', .07); break;
+      case 'myturn': tone(1046, 0, .12, 'sine', .05); tone(1318, .07, .2, 'sine', .04); break; // 自分の番になった
+      case 'yaku': tone(1318, 0, .08, 'triangle', .04); noise(0, .04, 4000, 3, .08); break; // 役が1つ出た
+      case 'stamp': tone(80, 0, .3, 'sine', .3); noise(0, .15, 500, 1, .45); tone(1568, .05, .6, 'triangle', .05); break; // 満貫などのハンコ
+      case 'total': [784, 988, 1175, 1568].forEach((f, i) => tone(f, i * .05, .4, 'triangle', .06)); break;
+      case 'coins': // 点数が動くチャリチャリ
+        for (let i = 0; i < 9; i++) { tone(2400 + Math.random() * 900, i * .12, .09, 'sine', .035); noise(i * .12, .03, 6000, 5, .06); } break;
+      default: tone(880, 0, .09, 'square', .035); tone(1320, .06, .16, 'triangle', .05);
+    }
   } catch (e) { /* 音が出せない環境では無音 */ }
+}
+// 対局中の音は、右上の「音」ボタンで止められる
+let soundOn = store.get('mj.sound') !== '0';
+const gsfx = (kind) => { if (soundOn) sfx(kind); };
+// iPhoneは画面に触れるまで音を出せないので、最初のタップで準備しておく
+document.addEventListener('pointerdown', () => {
+  try { actx = actx || new (window.AudioContext || window.webkitAudioContext)(); if (actx.state === 'suspended') actx.resume(); } catch (e) { /* 無音 */ }
+}, { passive: true });
+
+// 結果画面の音を、演出の時間に合わせて鳴らす（途中から描き直したり飛ばしたりしたら、その時点から鳴らし直す）
+let resSfxStart = 0, resSfxTimers = [];
+function scheduleResultSfx(list) {
+  if (resSfxStart === resStart) return;
+  resSfxStart = resStart;
+  resSfxTimers.forEach(clearTimeout);
+  const now = Date.now() - resStart;
+  resSfxTimers = list.filter((x) => x.at >= now - 50).map((x) => setTimeout(() => { if (S && S.phase === 'result') gsfx(x.kind); }, Math.max(0, x.at - now)));
 }
 
 // 部屋（ロビー）：上に部屋番号、真ん中に4つの席（キャラの立ち絵）、下にルールと操作
@@ -1574,7 +1641,7 @@ function gameHTML() {
     ${plate(rel(2), 'top')}${plate(rel(3), 'left')}${plate(rel(1), 'right')}
     <div class="info"><div class="dora">${dora}</div>
       <div class="cnt"><span>${S.honba}本場</span><span><i class="stick"></i>×${S.kyotaku}</span></div>${netDot}</div>
-    <div class="tops">${isFull() ? '' : '<button class="small ghost" data-act="full">全画面</button>'}<button class="small ghost" data-act="yaku">役一覧</button><button class="small ghost" data-act="menu">メニュー</button></div>
+    <div class="tops">${isFull() ? '' : '<button class="small ghost" data-act="full">全画面</button>'}<button class="small ghost" data-act="sound" aria-pressed="${soundOn}">${soundOn ? '音 ON' : '音 OFF'}</button><button class="small ghost" data-act="yaku">役一覧</button><button class="small ghost" data-act="menu">メニュー</button></div>
     ${me >= 0 ? `<div class="toggles">${toggles}</div>` : ''}
     ${me >= 0 ? plate(me, 'me') + mineHTML(me) : `<p class="spect">観戦中です。手牌は見えません。</p>`}
     ${sheetHTML()}
@@ -1703,6 +1770,7 @@ function resultHTML() {
   if (key !== resKey) { resKey = key; resStart = Date.now(); }
   const D = (ms) => `style="--d:${Math.round(ms)}ms"`;
   let t = 350, pages = '';
+  const snd = []; // 演出に合わせて鳴らす音 { at: ms, kind }
   if (R.type === 'draw') {
     // 流局：テンパイ・ノーテンを1人ずつ
     const rows = [0, 1, 2, 3].map((s, i) => `<div class="rs-drow rs-a" ${D(t + 400 + i * 260)}>
@@ -1723,11 +1791,13 @@ function resultHTML() {
         <div class="rs-dora">ドラ ${R.doraInd.map((x) => tile(x, 'sm')).join('')}${w.ura ? '　裏 ' + R.uraInd.map((x) => tile(x, 'sm')).join('') : ''}</div></div>`;
       u += 450;
       const yaku = sc.yaku.map((y, i) => `<div class="rs-y rs-a" ${D(u + i * 320)}><span>${esc(y.name)}</span><b>${typeof y.han === 'number' ? y.han + '翻' : esc(y.han)}</b></div>`).join('');
+      sc.yaku.forEach((y, i) => snd.push({ at: u + i * 320, kind: 'yaku' }));
       u += sc.yaku.length * 320 + 250;
       const fu = sc.yakuman ? '' : `<span class="rs-fu rs-a" ${D(u)}>${sc.fu}符 ${sc.han}翻</span>`;
       if (!sc.yakuman) u += 450;
       const limit = sc.limit ? `<span class="rs-limit" ${D(u)}>${esc(sc.limit)}</span>` : '';
-      if (sc.limit) u += 700;
+      if (sc.limit) { snd.push({ at: u + 200, kind: 'stamp' }); u += 700; }
+      snd.push({ at: u, kind: 'total' });
       const total = `<span class="rs-total rs-a" ${D(u)}><b data-count="0,${sc.total},${u},700">0</b>点</span>`;
       const end = u + 700 + 1700;
       pages += `<div class="rs-page out" style="--o:${end}ms"><div class="rs-glow rs-a" ${D(t)}></div>${chara}
@@ -1737,6 +1807,8 @@ function resultHTML() {
   }
   // 4人の点数：増える人は増え、引かれる人は引かれていく。最後に順位を入れ替える
   resScoreAt = t;
+  snd.push({ at: t + 1100, kind: 'coins' });
+  scheduleResultSfx(snd);
   const old = S.scores.map((v, s) => v - R.delta[s]);
   const r0 = ranksOf(old), r1 = ranksOf(S.scores);
   const winners = R.type === 'draw' ? [] : R.wins.map((w) => w.seat);
@@ -1828,7 +1900,7 @@ function onTile(id) {
   const o = MJ.turnOptions(S, me);
   const allowed = ui.riichi ? o.discardable.filter((x) => o.riichi.includes(x >> 2)) : o.discardable;
   if (!allowed.includes(id)) return;
-  if (ui.sel !== id) { ui.sel = id; render(); return; }
+  if (ui.sel !== id) { ui.sel = id; gsfx('pick'); render(); return; }
   const riichi = ui.riichi;
   ui.sel = null; ui.riichi = false;
   send({ cmd: 'apply', a: { type: 'discard', id, riichi } });
@@ -1908,6 +1980,10 @@ function onAct(a, ds) {
       return send({ cmd: 'apply', a: { type: 'respond', resp: op.t === 'ron' ? { t: 'ron' } : op } });
     }
     case 'pass': return send({ cmd: 'apply', a: { type: 'respond', resp: { t: 'pass' } } });
+    case 'sound':
+      soundOn = !soundOn; store.set('mj.sound', soundOn ? '1' : '0');
+      gsfx('call');
+      return render();
     case 'res-skip': // 和了の説明を飛ばして、点数の移動から見る
       if (Date.now() - resStart < resScoreAt) { resStart = Date.now() - resScoreAt; render(); }
       return;
@@ -1926,7 +2002,7 @@ function onAct(a, ds) {
 /* ---------- 更新の確認 ----------
    ホーム画面から開くと古いページが残っていることがあるので、version.json を毎回取りに行き、
    新しい版があればURLを変えて読み込み直す（部屋の中にいるときは、部屋を出てから） */
-const BUILD = '2026-10-26.2';
+const BUILD = '2026-10-26.3';
 let newBuild = null, updateToldInRoom = false;
 function applyUpdateIfIdle() {
   if (!newBuild) return;
