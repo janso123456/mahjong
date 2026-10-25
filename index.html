@@ -468,6 +468,94 @@ html:has(body.in-game) { overflow: hidden; }
 @keyframes cfxRays { 0% { transform: scale(.3) rotate(0); opacity: 0; } 15% { transform: scale(1) rotate(10deg); opacity: 1; } 80% { opacity: .9; } 100% { transform: scale(1.15) rotate(60deg); opacity: 0; } }
 @keyframes cfxFlash { 0% { opacity: 0; } 15% { opacity: 1; } 100% { opacity: 0; } }
 
+/* 順位の札（名札と結果画面） */
+.rk { display: inline-block; flex: none; font-style: normal; font-family: var(--f-disp); font-weight: 400; font-size: 11px; line-height: 1; padding: 2px 5px 1px; margin-right: 4px;
+  border-radius: 4px; vertical-align: 1px; background: #46505b; color: #fff; }
+.rk1 { background: linear-gradient(#ffe9a0, #d9a32c); color: #2a1a00; }
+.rk2 { background: linear-gradient(#f2f5f8, #a9b4bf); color: #1b2128; }
+.rk3 { background: linear-gradient(#f0c39a, #a8673a); color: #2a1300; }
+
+/* 和了・流局の結果：画面を暗くして、左にキャラ、右に役と点数を順番に出す。そのあと4人の点数の増減。
+   --d はその部分が出るまでの時間、--t0 は描き直したときに途中から続けるためのずらし */
+.rs { position: absolute; inset: 0; z-index: 20; overflow: hidden; color: #f3e6c4; cursor: pointer; }
+.rs-a, .rs-limit, .rs-pop, .rs-btns, .rs-rank .old, .rs-rank .new { animation-delay: calc(var(--d, 0ms) + var(--t0)) !important; }
+.rs-a { animation: rsFadeUp .45s cubic-bezier(.2, .8, .2, 1) both; }
+.rs-dim { position: absolute; inset: 0; background: radial-gradient(ellipse at 30% 60%, rgba(50, 26, 6, .8), rgba(0, 0, 0, .9) 72%); animation: rsFade .6s ease-out both; animation-delay: var(--t0); }
+.rs-page { position: absolute; inset: 0; }
+.rs-page.out, .rs-skip { animation: rsPageOut .35s ease-in forwards; animation-delay: calc(var(--o) + var(--t0)); }
+.rs-glow { position: absolute; left: calc(var(--sl) - 6%); bottom: -20%; width: 52%; aspect-ratio: 1; border-radius: 50%;
+  background: radial-gradient(circle, rgba(255, 170, 60, .45), rgba(255, 110, 30, .12) 50%, transparent 70%); animation-name: rsFade !important; animation-duration: 1s !important; }
+.rs-chara { position: absolute; left: calc(var(--sl) + 1%); bottom: 0; width: 38%; height: 96%; background-repeat: no-repeat; background-position: center bottom; background-size: contain;
+  filter: drop-shadow(0 0 18px rgba(255, 170, 60, .35)) drop-shadow(0 8px 12px rgba(0, 0, 0, .6)); animation-name: rsCharaIn !important; animation-duration: .8s !important; }
+.rs-chara.none { display: grid; place-items: center; }
+.rs-chara.none span { width: min(60%, calc(var(--VH) * .5)); aspect-ratio: 1; border-radius: 50%; display: grid; place-items: center; font-family: var(--f-disp); font-size: calc(var(--VH) * .22); color: #fff;
+  background: linear-gradient(135deg, hsl(var(--hue) 55% 55%), hsl(calc(var(--hue) + 40) 55% 38%)); box-shadow: 0 0 0 4px rgba(255, 255, 255, .8); }
+.rs-info { position: absolute; left: calc(var(--sl) + 39%); right: calc(var(--sr) + 3%); top: 50%; transform: translateY(-50%); display: flex; flex-direction: column; gap: 8px; }
+.rs-who { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; }
+.rs-name { font-size: 18px; font-weight: 700; text-shadow: 0 2px 0 #000; }
+.rs-how { font-family: var(--f-disp); font-weight: 400; font-size: 34px; line-height: 1; color: #ff6a3d; text-shadow: 0 2px 0 #000, 0 0 14px rgba(255, 90, 40, .7); }
+.rs-from { font-size: 12px; color: #c9b082; }
+.rs-hand .winhand { --tw: min(30px, calc(var(--VW) * .55 / 16)); flex-wrap: nowrap; }
+.rs-dora { --tw: 16px; display: flex; align-items: center; gap: 2px; margin-top: 4px; font-size: 11px; color: #c9b082; }
+.rs-yaku { display: grid; grid-template-columns: 1fr 1fr; gap: 3px 22px; border-top: 1px solid rgba(216, 178, 90, .35); padding-top: 6px; }
+.rs-yaku:empty { display: none; }
+.rs-y { display: flex; justify-content: space-between; gap: 8px; font-size: 15px; font-weight: 700; animation-name: rsSlideIn !important; }
+.rs-y b { font-family: var(--f-disp); font-weight: 400; color: #ffd36b; white-space: nowrap; }
+.rs-pts { display: flex; align-items: center; gap: 16px; border-top: 1px solid rgba(216, 178, 90, .35); padding-top: 8px; min-height: 52px; }
+.rs-fu { font-family: var(--f-disp); font-size: 22px; }
+.rs-limit { font-family: var(--f-disp); font-size: 38px; line-height: 1.1; padding: 0 .25em; border: 3px solid #ffcf5a; border-radius: 6px; rotate: -6deg; color: #ffe08a;
+  text-shadow: 0 2px 0 #3a1a00, 0 0 16px rgba(255, 180, 60, .8); box-shadow: 0 0 16px rgba(255, 180, 60, .45), inset 0 0 10px rgba(255, 180, 60, .35);
+  animation: rsStamp .55s cubic-bezier(.2, .9, .3, 1.2) both; }
+.rs-total { margin-left: auto; font-family: var(--f-disp); font-size: 20px; white-space: nowrap; }
+.rs-total b { font-weight: 400; font-size: 40px; color: #fff3cf; text-shadow: 0 2px 0 #000, 0 0 14px rgba(255, 200, 100, .6); font-variant-numeric: tabular-nums; }
+.rs-draw { position: absolute; inset: 0; display: flex; flex-direction: column; justify-content: center; align-items: center; gap: 8px; padding: 0 calc(var(--sr) + 16px) 0 calc(var(--sl) + 16px); }
+.rs-dtitle { font-family: var(--f-disp); font-size: 44px; color: #cfe3ff; text-shadow: 0 3px 0 #001, 0 0 18px rgba(90, 150, 255, .8); }
+.rs-drow { display: flex; align-items: center; gap: 12px; width: min(640px, 100%); padding: 4px 12px; border-radius: 8px; background: rgba(0, 0, 0, .35); }
+.rs-drow b { font-family: var(--f-disp); font-weight: 400; color: #8c99a8; }
+.rs-drow b.ten { color: #ffd36b; }
+.rs-drow .rs-hand { margin-left: auto; }
+.rs-drow .winhand { --tw: min(20px, calc(var(--VW) * .4 / 14)); }
+.rs-score { display: flex; flex-direction: column; justify-content: center; align-items: center; gap: 8px; padding: 0 calc(var(--sr) + 16px) 0 calc(var(--sl) + 16px); }
+.rs-title { font-family: var(--f-disp); font-size: 18px; letter-spacing: .2em; color: #ffd36b; text-shadow: 0 2px 0 #000; }
+.rs-rows { display: flex; flex-direction: column; gap: 6px; width: min(600px, 100%); }
+.rs-row { display: grid; grid-template-columns: auto auto minmax(0, 1fr) auto 104px 76px; align-items: center; gap: 10px; padding: 5px 12px; border-radius: 8px;
+  background: linear-gradient(90deg, rgba(48, 32, 14, .94), rgba(18, 12, 6, .92)); border: 1px solid rgba(216, 178, 90, .45); font-variant-numeric: tabular-nums;
+  animation-name: rsRowIn !important; }
+.rs-row.win { border-color: #ffd36b; box-shadow: 0 0 14px rgba(255, 200, 90, .35); }
+.rs-row.me .rs-rname { color: #fff; }
+.rs-row .av { width: 30px; height: 30px; font-size: 14px; }
+.rs-rname { font-weight: 700; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.rs-rank { display: grid; }
+.rs-rank .rk { grid-area: 1 / 1; font-size: 14px; padding: 3px 7px 2px; margin: 0; }
+.rs-rank .old { animation: rsGone .25s ease-in forwards; }
+.rs-rank .new { animation: rsPop .5s cubic-bezier(.2, .9, .3, 1.3) both; }
+.rs-sc { font-family: var(--f-disp); font-size: 24px; text-align: right; }
+.rs-dv { font-weight: 700; font-size: 16px; text-align: right; animation: rsPop .5s cubic-bezier(.2, .9, .3, 1.3) both; }
+.rs-dv.plus { color: #7dffa8; text-shadow: 0 0 10px rgba(80, 255, 140, .5); }
+.rs-dv.minus { color: #ff7a6a; text-shadow: 0 0 10px rgba(255, 90, 70, .5); }
+.rs-btns { display: flex; gap: 10px; align-items: center; justify-content: center; flex-wrap: wrap; margin-top: 4px; animation: rsShow .4s ease-out both; }
+.rs-btns .muted { margin: 0; }
+.rs-skip { position: absolute; right: calc(var(--sr) + 14px); bottom: calc(var(--sb) + 10px); font-size: 11px; letter-spacing: .15em; color: rgba(243, 230, 196, .6); }
+@media (max-height: 340px) {
+  .rs-info { gap: 5px; }
+  .rs-y { font-size: 13px; }
+  .rs-how { font-size: 28px; }
+  .rs-total b { font-size: 32px; }
+  .rs-limit { font-size: 30px; }
+  .rs-row { padding: 3px 10px; }
+  .rs-sc { font-size: 20px; }
+}
+@keyframes rsFade { from { opacity: 0; } }
+@keyframes rsFadeUp { from { opacity: 0; translate: 0 10px; } }
+@keyframes rsSlideIn { from { opacity: 0; translate: 18px 0; } }
+@keyframes rsRowIn { from { opacity: 0; translate: 40px 0; } }
+@keyframes rsCharaIn { from { opacity: 0; translate: -35% 0; } 60% { opacity: 1; } }
+@keyframes rsStamp { 0% { opacity: 0; scale: 2.6; } 60% { opacity: 1; scale: .92; } 100% { opacity: 1; scale: 1; } }
+@keyframes rsPop { 0% { opacity: 0; scale: .4; } 70% { opacity: 1; scale: 1.15; } 100% { opacity: 1; scale: 1; } }
+@keyframes rsGone { to { opacity: 0; scale: .6; } }
+@keyframes rsPageOut { to { opacity: 0; visibility: hidden; } }
+@keyframes rsShow { from { opacity: 0; visibility: hidden; translate: 0 8px; } to { opacity: 1; visibility: visible; translate: 0 0; } }
+
 /* 全画面にできない端末（iPhone）向けの案内 */
 .fullhelp ol { margin: 0; padding-left: 1.4em; line-height: 1.8; }
 </style>
@@ -1180,6 +1268,7 @@ function render() {
   for (const e of events) {
     if (e.t === 'discard') { if (!reduceMotion()) flyDiscard(e.seat, rects); } else callFx(e);
   }
+  resTick();
 }
 
 function netNote() {
@@ -1439,6 +1528,7 @@ function gameHTML() {
   const doraInd = MJ.doraIndicators(S);
   const turnSeat = S.phase === 'turn' ? S.turn : -1;
   const wind = (s) => WN[MJ.seatWind(S, s) - 27];
+  const ranks = ranksOf(S.scores);
 
   // 名札：頭文字のアイコン・名前・風・点数
   const plate = (s, pos) => {
@@ -1449,7 +1539,7 @@ function gameHTML() {
       (st.bot && st.uid ? '<span class="tag cpu">代打ち</span>' : '') + (off ? '<span class="tag cpu">切断中</span>' : '');
     return `<div class="plate pl-${pos} ${turnSeat === s ? 'turn' : ''}">
       ${avatarHTML(seatAvatar(s), nm, (s * 83 + 200) % 360)}
-      <div class="pinfo"><span class="pn">${esc(nm)}</span>
+      <div class="pinfo"><span class="pn">${rankTag(ranks[s])}${esc(nm)}</span>
       <span class="ps"><b class="${s === d ? 'dealer' : ''}">${wind(s)}</b>${S.scores[s].toLocaleString()}</span>${tags ? `<span class="ptags">${tags}</span>` : ''}</div></div>`;
   };
   // 相手の手牌（裏向き）と鳴いた牌
@@ -1571,29 +1661,70 @@ function handBlock(hand, melds, owner, winTile) {
   return `<div class="winhand">${h.map((x) => tile(x)).join('')}${winTile !== undefined ? '<span class="gap"></span>' + tile(winTile, 'hl') : ''}${melds.length ? '<span class="gap"></span>' : ''}${melds.map((m) => meldHTML(m, owner)).join('<span class="gap"></span>')}</div>`;
 }
 
+// 順位（同点は起家に近い人が上）
+function ranksOf(scores) {
+  const r = [];
+  [0, 1, 2, 3].sort((a, b) => scores[b] - scores[a] || ((a - S.startDealer + 4) % 4) - ((b - S.startDealer + 4) % 4)).forEach((s, i) => { r[s] = i + 1; });
+  return r;
+}
+const rankTag = (r, cls) => `<i class="rk rk${r} ${cls || ''}">${r}位</i>`;
+
+// 結果の演出。描き直しても途中から続くよう、始まった時刻からの経過時間で各部分の出るタイミングをずらす
+let resKey = '', resStart = 0, resScoreAt = 0, resRaf = 0;
+
 function resultHTML() {
   const R = S.result;
   const me = mySeat();
-  let body;
+  const key = R.type + R.label + R.delta.join(',');
+  if (key !== resKey) { resKey = key; resStart = Date.now(); }
+  const D = (ms) => `style="--d:${Math.round(ms)}ms"`;
+  let t = 350, pages = '';
   if (R.type === 'draw') {
-    body = `<h2>流局</h2>` + [0, 1, 2, 3].map((s) => `<div><h3>${esc(nameOf(s))} — ${R.tenpai[s] ? 'テンパイ' : 'ノーテン'}</h3>${R.hands[s] ? handBlock(R.hands[s], S.players[s].melds, s) : ''}</div>`).join('');
+    // 流局：テンパイ・ノーテンを1人ずつ
+    const rows = [0, 1, 2, 3].map((s, i) => `<div class="rs-drow rs-a" ${D(t + 400 + i * 260)}>
+      <span class="rs-rname">${esc(nameOf(s))}</span><b class="${R.tenpai[s] ? 'ten' : ''}">${R.tenpai[s] ? 'テンパイ' : 'ノーテン'}</b>
+      ${R.hands[s] ? `<div class="rs-hand">${handBlock(R.hands[s], S.players[s].melds, s)}</div>` : ''}</div>`).join('');
+    const end = t + 400 + 4 * 260 + 1800;
+    pages += `<div class="rs-page out" style="--o:${end}ms"><div class="rs-draw"><div class="rs-dtitle rs-a" ${D(t)}>流局</div>${rows}</div></div>`;
+    t = end;
   } else {
-    body = R.wins.map((w) => {
-      const sc = w.score;
-      const how = R.type === 'tsumo' ? 'ツモ' : `ロン ← ${esc(nameOf(w.from))}`;
-      const head = sc.yakuman ? sc.limit : `${sc.fu}符 ${sc.han}翻${sc.limit ? ' ' + sc.limit : ''}`;
-      return `<div style="display:flex;flex-direction:column;gap:10px">
-        <div class="winner">${seatAvatar(w.seat) ? `<span class="winchara ${avClass(seatAvatar(w.seat))}"></span>` : ''}<h2>${esc(nameOf(w.seat))} ${how}</h2></div>
-        ${handBlock(w.hand, w.melds, w.seat, w.tile)}
-        <div class="yaku">${sc.yaku.map((y) => `<span>${esc(y.name)}</span><span>${typeof y.han === 'number' ? y.han + '翻' : y.han}</span>`).join('')}</div>
-        <div class="big">${head}　${sc.total.toLocaleString()}点</div></div>`;
-    }).join('');
-    body += `<div class="dora" style="--tw:22px;gap:3px">ドラ表示 ${R.doraInd.map((x) => tile(x, 'sm')).join('')}${R.wins.some((w) => w.ura) ? '　裏 ' + R.uraInd.map((x) => tile(x, 'sm')).join('') : ''}</div>`;
+    R.wins.forEach((w) => {
+      // 和了：左にキャラ、右に役を1つずつ → 符・翻 → 満貫など → 点数
+      const sc = w.score, src = seatAvatar(w.seat), nm = nameOf(w.seat);
+      const chara = src ? `<div class="rs-chara rs-a ${avClass(src)}" ${D(t)}></div>`
+        : `<div class="rs-chara none rs-a" ${D(t)}><span style="--hue:${(w.seat * 83 + 200) % 360}">${esc(nm.slice(0, 1))}</span></div>`;
+      const who = `<div class="rs-who rs-a" ${D(t + 200)}><span class="rs-name">${esc(nm)}</span><b class="rs-how">${R.type === 'tsumo' ? 'ツモ' : 'ロン'}</b>${R.type === 'ron' ? `<span class="rs-from">${esc(nameOf(w.from))} から</span>` : ''}</div>`;
+      let u = t + 600;
+      const hand = `<div class="rs-hand rs-a" ${D(u)}>${handBlock(w.hand, w.melds, w.seat, w.tile)}
+        <div class="rs-dora">ドラ ${R.doraInd.map((x) => tile(x, 'sm')).join('')}${w.ura ? '　裏 ' + R.uraInd.map((x) => tile(x, 'sm')).join('') : ''}</div></div>`;
+      u += 450;
+      const yaku = sc.yaku.map((y, i) => `<div class="rs-y rs-a" ${D(u + i * 320)}><span>${esc(y.name)}</span><b>${typeof y.han === 'number' ? y.han + '翻' : esc(y.han)}</b></div>`).join('');
+      u += sc.yaku.length * 320 + 250;
+      const fu = sc.yakuman ? '' : `<span class="rs-fu rs-a" ${D(u)}>${sc.fu}符 ${sc.han}翻</span>`;
+      if (!sc.yakuman) u += 450;
+      const limit = sc.limit ? `<span class="rs-limit" ${D(u)}>${esc(sc.limit)}</span>` : '';
+      if (sc.limit) u += 700;
+      const total = `<span class="rs-total rs-a" ${D(u)}><b data-count="0,${sc.total},${u},700">0</b>点</span>`;
+      const end = u + 700 + 1700;
+      pages += `<div class="rs-page out" style="--o:${end}ms"><div class="rs-glow rs-a" ${D(t)}></div>${chara}
+        <div class="rs-info">${who}${hand}<div class="rs-yaku">${yaku}</div><div class="rs-pts">${fu}${limit}${total}</div></div></div>`;
+      t = end;
+    });
   }
-  const deltas = `<div class="deltas">${[0, 1, 2, 3].map((s) => {
+  // 4人の点数：増える人は増え、引かれる人は引かれていく。最後に順位を入れ替える
+  resScoreAt = t;
+  const old = S.scores.map((v, s) => v - R.delta[s]);
+  const r0 = ranksOf(old), r1 = ranksOf(S.scores);
+  const winners = R.type === 'draw' ? [] : R.wins.map((w) => w.seat);
+  const rows = [0, 1, 2, 3].sort((a, b) => MJ.seatWind(S, a) - MJ.seatWind(S, b)).map((s, i) => {
     const dv = R.delta[s];
-    return `<span class="wind">${WN[MJ.seatWind(S, s) - 27]}</span><span>${esc(nameOf(s))}</span><span class="${dv > 0 ? 'plus' : dv < 0 ? 'minus' : ''}">${dv > 0 ? '+' : ''}${dv ? dv.toLocaleString() : '±0'}</span><span>${S.scores[s].toLocaleString()}</span>`;
-  }).join('')}</div>`;
+    const rank = r0[s] === r1[s] ? rankTag(r1[s]) : rankTag(r0[s], 'old') + rankTag(r1[s], 'new');
+    return `<div class="rs-row rs-a ${winners.includes(s) ? 'win' : ''} ${s === me ? 'me' : ''}" ${D(t + 200 + i * 120)}>
+      <span class="wind">${WN[MJ.seatWind(S, s) - 27]}</span>${avatarHTML(seatAvatar(s), nameOf(s), (s * 83 + 200) % 360)}
+      <span class="rs-rname">${esc(nameOf(s))}</span><span class="rs-rank" ${D(t + 2500)}>${rank}</span>
+      <span class="rs-sc" data-count="${old[s]},${S.scores[s]},${t + 1100},1300">${old[s].toLocaleString()}</span>
+      <span class="rs-dv rs-pop ${dv > 0 ? 'plus' : dv < 0 ? 'minus' : ''}" ${D(t + 850)}>${dv > 0 ? '+' : ''}${dv ? dv.toLocaleString() : '±0'}</span></div>`;
+  }).join('');
   let btn;
   if (role === 'local') btn = `<button class="gold" data-act="next">次の局へ</button>`;
   else {
@@ -1607,7 +1738,27 @@ function resultHTML() {
       if (role === 'host') btn += `<button class="ghost" data-act="next">待たずに次の局へ</button>`;
     }
   }
-  return `<div class="sheet-bg"><div class="sheet"><div class="muted">${esc(R.label)}</div>${body}<h3>点数の移動</h3>${deltas}<div class="btnrow" style="flex-direction:column">${btn}</div></div></div>`;
+  const skip = Date.now() - resStart < resScoreAt ? `<span class="rs-skip" style="--o:${t}ms">タップで点数へ</span>` : '';
+  return `<div class="rs" data-act="res-skip" style="--t0:${resStart - Date.now()}ms"><div class="rs-dim"></div>${pages}
+    <div class="rs-page rs-score"><div class="rs-title rs-a" ${D(t)}>${esc(R.label)}　点数の移動</div>
+      <div class="rs-rows">${rows}</div><div class="rs-btns" ${D(t + 2700)}>${btn}</div></div>${skip}</div>`;
+}
+
+// 点数の数字を少しずつ増やす・減らす（data-count="はじめ,おわり,開始ms,長さms"）
+function resTick() {
+  cancelAnimationFrame(resRaf);
+  const els = app.querySelectorAll('[data-count]');
+  if (!els.length) return;
+  const now = Date.now() - resStart;
+  let busy = false;
+  els.forEach((e) => {
+    const [a, b, st, du] = e.dataset.count.split(',').map(Number);
+    const k = Math.min(1, Math.max(0, (now - st) / du));
+    if (k < 1) busy = true;
+    const v = k === 1 ? b : Math.round((a + (b - a) * (1 - Math.pow(1 - k, 3))) / 100) * 100;
+    e.textContent = v.toLocaleString();
+  });
+  if (busy) resRaf = requestAnimationFrame(resTick);
 }
 
 function endHTML() {
@@ -1733,6 +1884,9 @@ function onAct(a, ds) {
       return send({ cmd: 'apply', a: { type: 'respond', resp: op.t === 'ron' ? { t: 'ron' } : op } });
     }
     case 'pass': return send({ cmd: 'apply', a: { type: 'respond', resp: { t: 'pass' } } });
+    case 'res-skip': // 和了の説明を飛ばして、点数の移動から見る
+      if (Date.now() - resStart < resScoreAt) { resStart = Date.now() - resScoreAt; render(); }
+      return;
     case 'ready': return send({ cmd: 'ready' });
     case 'next': return send({ cmd: 'next' });
     case 'togglebot': ui.menu = false; return send({ cmd: 'togglebot', seat: +ds.seat });
@@ -1748,7 +1902,7 @@ function onAct(a, ds) {
 /* ---------- 更新の確認 ----------
    ホーム画面から開くと古いページが残っていることがあるので、version.json を毎回取りに行き、
    新しい版があればURLを変えて読み込み直す（部屋の中にいるときは、部屋を出てから） */
-const BUILD = '2026-10-24.4';
+const BUILD = '2026-10-26.1';
 let newBuild = null, updateToldInRoom = false;
 function applyUpdateIfIdle() {
   if (!newBuild) return;
