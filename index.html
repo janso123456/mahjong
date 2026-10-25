@@ -391,6 +391,12 @@ html:has(body.in-game) { overflow: hidden; }
 .claimq { --tw: calc(var(--htw) * .8); display: inline-flex; margin-right: 4px; }
 .hint { position: absolute; left: 50%; transform: translateX(-50%); bottom: calc(var(--handH) + 12px); font-size: 12px; color: #d5dee8;
   background: rgba(10, 18, 28, .6); padding: 4px 10px; border-radius: 999px; z-index: 3; white-space: nowrap; display: flex; gap: 6px; align-items: center; }
+/* リーチの待ち：牌と残り枚数 */
+.hint .waits { --tw: 22px; display: flex; align-items: center; gap: 8px; margin-left: 6px; padding-left: 10px; border-left: 1px solid rgba(255, 255, 255, .25); }
+.hint .waits b { color: #f0c75e; font-weight: 700; }
+.hint .waits .w { display: inline-flex; align-items: center; gap: 3px; }
+.hint .waits .w i { font-style: normal; font-weight: 700; font-variant-numeric: tabular-nums; }
+.hint .waits .w.none { opacity: .45; }
 .spect { position: absolute; bottom: 12px; left: 50%; transform: translateX(-50%); color: #d5dee8; font-size: 13px; }
 
 /* 対局中の結果・メニューは卓の中央に（卓と一緒に回る） */
@@ -1604,15 +1610,33 @@ function mineHTML(me) {
     if (o.riichi.length && !ui.riichi && !p.riichi) btns += `<button class="gold" data-act="riichi">リーチ</button>`;
     if (ui.riichi) btns += `<button class="ghost" data-act="riichi-cancel">リーチをやめる</button>`;
     for (const k of o.kans) btns += `<button data-act="kan" data-type="${k.type}" data-k="${k.k}">カン <span class="mini">${tile(k.k * 4 + 1, 'sm')}</span></button>`;
-    hint = ui.riichi ? 'リーチで切る牌を選んでください' : p.riichi ? 'ツモ切りします…' : ui.sel !== null ? 'もう一度タップで切ります' : '切る牌をタップ';
+    hint = ui.riichi ? (ui.sel !== null ? 'もう一度タップでリーチ' : 'リーチで切る牌をタップすると、待ちが出ます') : p.riichi ? 'ツモ切りします…' : ui.sel !== null ? 'もう一度タップで切ります' : '切る牌をタップ';
   } else if (S.phase === 'claim') {
     hint = 'ほかの人の選択を待っています';
   }
   const furiten = p.riichi && MJ.isFuriten(p) ? '<span class="tag cpu">フリテン</span>' : '';
-  return `${hint || furiten ? `<div class="hint">${furiten}${esc(hint)}</div>` : ''}
+  const waits = myTurn && ui.riichi && ui.sel !== null ? waitsHTML(p, ui.sel) : '';
+  return `${hint || furiten ? `<div class="hint">${furiten}${esc(hint)}${waits}</div>` : ''}
     <div class="acts">${btns}</div>
     <div class="handrow"><div class="hand ${myTurn ? '' : 'wait'}">${tiles}</div>
       <div class="mymelds">${p.melds.map((m) => meldHTML(m, me)).join('')}</div></div>`;
+}
+
+// リーチで discardId を切ったときの待ちと、その牌が自分から見てあと何枚残っているか
+function waitsHTML(p, discardId) {
+  const hand = p.hand.filter((x) => x !== discardId);
+  const ws = MJ.waits(hand, p.melds.length);
+  if (!ws.length) return '';
+  // 見えている牌：自分の手牌・切る牌・全員の河と鳴いた牌・ドラ表示牌
+  const seen = MJ.counts(hand.concat([discardId],
+    ...S.players.map((q) => q.river.filter((r) => !r.called).map((r) => r.id)), // 鳴かれた牌は鳴いた側で数える
+    ...S.players.map((q) => [].concat(...q.melds.map((m) => m.tiles))),
+    MJ.doraIndicators(S)));
+  const left = ws.map((k) => Math.max(0, 4 - seen[k]));
+  const mine = new Set(p.river.map((r) => r.id >> 2).concat([discardId >> 2]));
+  const furiten = ws.some((k) => mine.has(k));
+  return `<span class="waits"><b>待ち</b>${ws.map((k, i) => `<span class="w ${left[i] ? '' : 'none'}">${tile(k * 4 + 1, 'sm')}<i>残${left[i]}</i></span>`).join('')}
+    <b>計${left.reduce((a, b) => a + b, 0)}枚</b>${furiten ? '<span class="tag cpu">フリテン</span>' : ''}</span>`;
 }
 
 function claimHTML(me) {
@@ -1902,7 +1926,7 @@ function onAct(a, ds) {
 /* ---------- 更新の確認 ----------
    ホーム画面から開くと古いページが残っていることがあるので、version.json を毎回取りに行き、
    新しい版があればURLを変えて読み込み直す（部屋の中にいるときは、部屋を出てから） */
-const BUILD = '2026-10-26.1';
+const BUILD = '2026-10-26.2';
 let newBuild = null, updateToldInRoom = false;
 function applyUpdateIfIdle() {
   if (!newBuild) return;
