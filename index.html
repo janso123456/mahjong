@@ -474,6 +474,41 @@ html:has(body.in-game) { overflow: hidden; }
 @keyframes cfxRays { 0% { transform: scale(.3) rotate(0); opacity: 0; } 15% { transform: scale(1) rotate(10deg); opacity: 1; } 80% { opacity: .9; } 100% { transform: scale(1.15) rotate(60deg); opacity: 0; } }
 @keyframes cfxFlash { 0% { opacity: 0; } 15% { opacity: 1; } 100% { opacity: 0; } }
 
+/* ツモ・ロンのカットイン：画面が暗くなり、斜めの赤い帯に集中線が走って、キャラが右から飛び込む */
+.cutin { position: absolute; inset: 0; animation: ciOut .3s ease-in 1.1s forwards; }
+.ci-dim { position: absolute; inset: 0; background: rgba(0, 0, 0, .6); animation: rsFade .2s ease-out both; }
+.ci-band { position: absolute; left: -4%; right: -4%; top: 20%; height: 60%; overflow: hidden;
+  clip-path: polygon(0 18%, 100% 0, 100% 82%, 0 100%);
+  background: linear-gradient(100deg, #1c0300 0%, #7d0f05 30%, #d63a12 58%, #ff8a3a 72%, #5a0a02 100%);
+  animation: ciBand .28s cubic-bezier(.2, .9, .3, 1) both; }
+.ci-band::after { content: ""; position: absolute; inset: 0; background: linear-gradient(100deg, transparent 30%, rgba(255, 255, 255, .55) 45%, transparent 55%);
+  animation: ciShine .6s ease-out .2s both; }
+/* 集中線：横に流れる光の筋 */
+.ci-lines { position: absolute; inset: 0; opacity: .7;
+  background: repeating-linear-gradient(90deg, transparent 0 40px, rgba(255, 236, 190, .55) 40px 140px, transparent 140px 230px, rgba(255, 236, 190, .35) 230px 270px, transparent 270px 380px);
+  -webkit-mask: repeating-linear-gradient(0deg, transparent 0 9px, #000 9px 11px, transparent 11px 23px, #000 23px 24px, transparent 24px 31px);
+  mask: repeating-linear-gradient(0deg, transparent 0 9px, #000 9px 11px, transparent 11px 23px, #000 23px 24px, transparent 24px 31px);
+  animation: ciLines .25s linear infinite; }
+/* キャラ：帯の中に上半身が大きく入る */
+.ci-chara { position: absolute; right: 4%; top: -4%; width: 50%; height: 200%; background-repeat: no-repeat; background-position: center top; background-size: contain;
+  filter: drop-shadow(-14px 0 0 rgba(0, 0, 0, .35)) drop-shadow(0 0 18px rgba(255, 210, 140, .7));
+  animation: ciChara 1.1s cubic-bezier(.12, .9, .25, 1) .06s both; }
+.ci-chara.none { height: 100%; top: 0; display: grid; place-items: center; }
+.ci-chara.none span { height: 80%; aspect-ratio: 1; border-radius: 50%; display: grid; place-items: center; font-family: var(--f-disp); font-size: min(26vh, 26vw); color: #fff;
+  background: linear-gradient(135deg, hsl(var(--hue) 55% 55%), hsl(calc(var(--hue) + 40) 55% 38%)); box-shadow: 0 0 0 5px rgba(255, 255, 255, .85); }
+.ci-name { position: absolute; left: 8%; bottom: 20%; display: flex; flex-direction: column; font-family: var(--f-disp); font-size: min(8vh, 8vw); line-height: 1.05; color: #fff;
+  text-shadow: 0 3px 0 #2a0500, 0 0 16px rgba(255, 120, 40, .9); white-space: nowrap; animation: ciName .45s cubic-bezier(.2, .9, .3, 1) .22s both; }
+.ci-name small { font-family: var(--f-ui); font-weight: 700; font-size: .38em; letter-spacing: .5em; color: #ffd36b; }
+/* 帯の上下の金の線（帯の形に沿った影で描く） */
+.ci-wrap { position: absolute; inset: 0; filter: drop-shadow(0 -4px 0 #ffe08a) drop-shadow(0 4px 0 #ffe08a) drop-shadow(0 0 14px rgba(255, 190, 80, .8)); }
+.cutin.calm .ci-lines { animation: none; }
+@keyframes ciBand { from { clip-path: polygon(0 18%, 0 18%, 0 100%, 0 100%); } }
+@keyframes ciShine { from { translate: -100% 0; } to { translate: 100% 0; } }
+@keyframes ciLines { to { background-position-x: -380px; } }
+@keyframes ciChara { 0% { opacity: 0; translate: 70% 0; scale: 1.15; } 30% { opacity: 1; translate: -3% 0; scale: 1; } 100% { opacity: 1; translate: -8% 0; scale: 1.03; } }
+@keyframes ciName { from { opacity: 0; translate: -40px 0; } }
+@keyframes ciOut { to { opacity: 0; translate: -6% 0; } }
+
 /* 順位の札（名札と結果画面） */
 .rk { display: inline-block; flex: none; font-style: normal; font-family: var(--f-disp); font-weight: 400; font-size: 11px; line-height: 1; padding: 2px 5px 1px; margin-right: 4px;
   border-radius: 4px; vertical-align: 1px; background: #46505b; color: #fff; }
@@ -1227,8 +1262,25 @@ function callFx(ev) {
   setTimeout(() => box.remove(), dur + 50);
 }
 
+// ツモ・ロンの前のカットイン：斜めの帯が走り、和了した人のキャラが大きく飛び込んでくる
+const CUTIN_MS = 1300;
+let fxTimers = [];
+function cutIn(ev) {
+  let layer = document.querySelector('.callfx');
+  if (!layer) { layer = document.createElement('div'); layer.className = 'callfx'; document.body.appendChild(layer); }
+  const src = seatAvatar(ev.seat), nm = nameOf(ev.seat);
+  const el = document.createElement('div');
+  el.className = 'cutin' + (reduceMotion() ? ' calm' : '');
+  el.innerHTML = `<div class="ci-dim"></div><div class="ci-wrap"><div class="ci-band"><div class="ci-lines"></div>
+    ${src ? `<div class="ci-chara ${avClass(src)}"></div>` : `<div class="ci-chara none" style="--hue:${(ev.seat * 83 + 200) % 360}"><span>${esc(nm.slice(0, 1))}</span></div>`}
+    <div class="ci-name"><small>${esc(ev.text === 'ツモ' ? 'TSUMO' : 'RON')}</small>${esc(nm)}</div></div></div>`;
+  layer.appendChild(el);
+  fxTimers.push(setTimeout(() => el.remove(), CUTIN_MS + 400));
+}
+
 function clearTableFx() {
   fxPrev = null; resultHoldUntil = 0; clearTimeout(resultHoldTimer);
+  fxTimers.forEach(clearTimeout); fxTimers = [];
   const layer = document.querySelector('.callfx');
   if (layer) layer.innerHTML = '';
 }
@@ -1263,21 +1315,29 @@ function render() {
   const events = tableEvents(fxPrev);
   fxPrev = tableSnap();
   // ツモ・ロン・流局は、文字の演出が終わってから結果の画面を出す
+  // ツモ・ロンは、和了した人ごとにカットインを出してから文字を出す（ダブロンは1人ずつ順番に）
+  const wins = events.filter((e) => e.kind === 'win');
+  const winTextAt = wins.length * CUTIN_MS;
   const ender = events.find((e) => e.kind === 'win' || e.kind === 'draw');
   if (ender) {
-    resultHoldUntil = Date.now() + (ender.kind === 'win' ? 2000 : 1500);
+    resultHoldUntil = Date.now() + (ender.kind === 'win' ? winTextAt + 2000 : 1500);
     clearTimeout(resultHoldTimer);
     resultHoldTimer = setTimeout(render, resultHoldUntil - Date.now() + 20);
   }
   const rects = events.length ? handRects() : null;
   app.innerHTML = gameHTML();
   for (const e of events) {
-    if (e.t === 'discard') { if (!reduceMotion()) flyDiscard(e.seat, rects); } else callFx(e);
+    if (e.t === 'discard') { if (!reduceMotion()) flyDiscard(e.seat, rects); } else if (e.kind !== 'win') callFx(e);
   }
-  // 音：同時に起きたことは一番大きいものだけ鳴らす
+  wins.forEach((e, i) => {
+    fxTimers.push(setTimeout(() => { cutIn(e); gsfx('cutin'); }, i * CUTIN_MS));
+    fxTimers.push(setTimeout(() => callFx(e), winTextAt));
+  });
+  if (wins.length) fxTimers.push(setTimeout(() => gsfx('win'), winTextAt));
+  // 音：同時に起きたことは一番大きいものだけ鳴らす（和了の音はカットインのあと）
   const kinds = events.map((e) => (e.t === 'discard' ? 'discard' : e.kind));
-  const loud = ['win', 'draw', 'riichi', 'call', 'discard'].find((k) => kinds.includes(k));
-  if (loud) gsfx(loud);
+  const loud = ['draw', 'riichi', 'call', 'discard'].find((k) => kinds.includes(k));
+  if (loud && !wins.length) gsfx(loud);
   if (loud === 'riichi' && kinds.includes('discard')) gsfx('discard');
   // 自分の番・自分が鳴けるときに、軽く知らせる
   const me = mySeat();
@@ -1508,6 +1568,9 @@ function sfx(kind) {
         tone(660, 0, .1, 'square', .05); tone(990, .08, .18, 'square', .05); noise(0, .05, 2000, 2, .2); break;
       case 'riichi': // リーチ：駆け上がる音と、点棒を置く音
         sweep(220, 880, 0, .35, 'sawtooth', .05); tone(1175, .3, .5, 'triangle', .08); tone(1568, .38, .6, 'triangle', .06); noise(.32, .06, 3000, 4, .3); break;
+      case 'cutin': // カットイン：風を切る音と、キャラが止まるときの「ガッ」
+        noise(0, .35, 1200, .7, .35); sweep(300, 1400, 0, .3, 'sawtooth', .04);
+        noise(.28, .12, 700, 1, .5); tone(98, .28, .35, 'sine', .3); tone(1760, .32, .5, 'triangle', .05); break;
       case 'win': // ツモ・ロン：ドンと鳴って和音がきらめく
         tone(55, 0, .5, 'sine', .35); noise(0, .25, 300, .8, .4);
         [523, 659, 784, 1047].forEach((f, i) => tone(f, .05 + i * .06, 1.1, 'triangle', .07));
@@ -2002,7 +2065,7 @@ function onAct(a, ds) {
 /* ---------- 更新の確認 ----------
    ホーム画面から開くと古いページが残っていることがあるので、version.json を毎回取りに行き、
    新しい版があればURLを変えて読み込み直す（部屋の中にいるときは、部屋を出てから） */
-const BUILD = '2026-10-26.3';
+const BUILD = '2026-10-27.1';
 let newBuild = null, updateToldInRoom = false;
 function applyUpdateIfIdle() {
   if (!newBuild) return;
